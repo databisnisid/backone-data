@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     'modelcluster',
     'taggit',
     'axes',
+    'django_cleanup.apps.CleanupConfig',
 ]
 
 

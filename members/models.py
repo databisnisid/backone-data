@@ -23,6 +23,8 @@ class Members(models.Model):
         verbose_name=_('Network'),
     )
 
+    upload_baa = models.FileField(_('BAA'), upload_to='baa/', blank=True, null=True)
+
     '''
     user = models.ForeignKey(
         User,
@@ -50,6 +52,11 @@ class Members(models.Model):
 
     def __str__(self):
         return '%s' % self.name
+
+    def delete(self, *args, **kwargs):
+        if self.upload_baa:
+            self.upload_baa.delete()
+        super().delete(*args, **kwargs)
 
     def name_with_network(self):
         text = format_html('{}<br /><small>{}</small>', self.name, self.network)

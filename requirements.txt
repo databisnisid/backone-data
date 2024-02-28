@@ -6,6 +6,7 @@ charset-normalizer==3.3.2
 defusedxml==0.7.1
 Django==4.2.4
 django-axes==6.3.0
+django-cleanup==8.1.0
 django-crum==0.7.9
 django-filter==23.5
 django-modelcluster==6.3
