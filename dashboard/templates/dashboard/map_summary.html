@@ -1,0 +1,313 @@
+{% load i18n wagtailadmin_tags %}
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=default"></script>
+
+<!--
+    <link rel="stylesheet" type="text/css" href="{% versioned_static 'dashboard/css/map.css' %}" />
+-->
+
+<style>
+#map {
+  height: 600px;
+  width: 100%;
+}
+
+@keyframes drop {
+  0% {
+    transform: translateY(-200px) scaleY(0.9);
+    opacity: 0;
+  }
+  5% {
+    opacity: 0.7;
+  }
+  50% {
+    transform: translateY(0px) scaleY(1);
+    opacity: 1;
+  }
+  65% {
+    transform: translateY(-17px) scaleY(0.9);
+    opacity: 1;
+  }
+  75% {
+    transform: translateY(-22px) scaleY(0.9);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0px) scaleY(1);
+    opacity: 1;
+  }
+}
+.drop {
+  animation: drop 0.3s linear forwards var(--delay-time);
+}
+
+@keyframes bounce {
+	0%, 20%, 50%, 80%, 100% {transform: translateY(0);}
+	40% {transform: translateY(-30px);}
+	60% {transform: translateY(-15px);}
+}
+.bounce {
+  animation: bounce 2s ease infinite;
+}
+</style>
+
+<!--
+    <script type="module" src="{% versioned_static 'dashboard/js/map.js' %}"></script>
+-->
+<script src="https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js"></script>
+
+    <hr />
+    <section class="panel summary nice-padding">
+        <!--The div element for the map -->
+        <div id="map"></div>
+    </section>
+    <hr />
+
+    <!-- prettier-ignore -->
+    <script>(g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})
+        ({key: "{{ settings.GOOGLE_MAPS_V3_APIKEY }}", v: "beta"});</script>
+
+<script>
+
+// Initialize and add the map
+let map;
+
+const intersectionObserverDrop = new IntersectionObserver((entries) => {
+  for (const entry of entries) {
+    if (entry.isIntersecting) {
+      entry.target.classList.add("drop");
+      intersectionObserverDrop.unobserve(entry.target);
+    }
+  }
+});
+
+const intersectionObserverBounce = new IntersectionObserver((entries) => {
+  for (const entry of entries) {
+    if (entry.isIntersecting) {
+      entry.target.classList.add("bounce");
+      intersectionObserverBounce.unobserve(entry.target);
+    }
+  }
+});
+
+function drawMarker(data_marker, map) {
+    var infowindow = new google.maps.InfoWindow();
+    var marker, i;
+    var markers = [];
+    var markerColor, pinGlyph;
+    var is_online = false;
+
+    for (i = 0; i < data_marker.length; i++) {  
+
+      //data_marker[i]['is_problem'] = 1;
+      //data_marker[i]['is_online'] = 1;
+
+      if (data_marker[i]['is_online'])
+        is_online = true;
+      
+
+      if (data_marker[i]['is_online'])
+        if (data_marker[i]['is_problem'])
+            markerColor = '#ffc300'; // Yellow
+        else
+            markerColor = '#3fff33';  // Green
+      else
+          markerColor = '#ff5733'; // Red
+
+      if (! data_marker[i]['is_problem'])
+        pinGlyph = new google.maps.marker.PinElement({
+            background: markerColor,
+            borderColor: "black",
+            glyphColor: "black",
+            scale: 0.8
+        });
+      else
+        pinGlyph = new google.maps.marker.PinElement({
+            background: markerColor,
+            borderColor: "black",
+            glyphColor: "black",
+            scale: 1.2
+        });
+
+      if (! data_marker[i]['is_problem'])
+        marker = new google.maps.marker.AdvancedMarkerElement({
+            position: new google.maps.LatLng(data_marker[i]['lat'], data_marker[i]['lng']),
+            content: pinGlyph.element,
+            title: data_marker[i]['name']
+        });
+      else
+      {
+        marker = new google.maps.marker.AdvancedMarkerElement({
+            position: new google.maps.LatLng(data_marker[i]['lat'], data_marker[i]['lng']),
+            content: pinGlyph.element,
+            map: map,
+            title: data_marker[i]['name']
+        });
+      }
+
+      const content = marker.content;
+      if (! data_marker[i]['is_problem']) {
+        // Start - Animation Drop
+        //const content = marker.content;
+
+        content.style.opacity = "0";
+        content.addEventListener("animationend", (event) => {
+            content.classList.remove("drop");
+            content.style.opacity = "1";
+            //if (data_marker[i]['is_problem'])
+            //    intersectionObserverBounce.observe(content);
+        });
+
+        const time = 1 + Math.random(); // 2s delay for easy to see the animation
+
+        content.style.setProperty("--delay-time", time + "s");
+        intersectionObserverDrop.observe(content);
+        // End - Animation Drop
+        
+      } else {
+        // const content = marker.content;
+        intersectionObserverBounce.observe(content);
+      }
+
+
+      // Start - Content InfoWindow
+      let contentString =
+            '<div id="content">' +
+            '<div id="siteNotice"></div>' +
+            '<h2 id="firstHeading" class="firstHeading">' + data_marker[i]['name'] + '</h2>' +
+            '<div id="bodyContent">' +
+            '<a href="/members/members/?q=' + data_marker[i]['member_id'] + '">CHECK</a>' +
+            '</div>' +
+            '</div>';
+
+      
+      google.maps.event.addListener(marker, 'click', (function(marker, i) {
+        return function() {
+          infowindow.setContent(contentString);
+          infowindow.open(map, marker);
+        }
+      })(marker, i));
+      // End - Content InfoWindow
+
+      if (! data_marker[i]['is_problem'])
+        markers.push(marker);
+    }
+
+    if (is_online)
+        markerColor = "#009009";
+    else
+        markerColor = "#ff0000";
+
+    let customRenderer = new markerClusterer.DefaultRenderer();
+    customRenderer.render = function({ count, position }, stats, map) {
+        const color = markerColor;
+        // create svg literal with fill color
+        const svg = `<svg fill="${color}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="50" height="50">
+<circle cx="120" cy="120" opacity=".6" r="70" />
+<circle cx="120" cy="120" opacity=".3" r="90" />
+<circle cx="120" cy="120" opacity=".2" r="110" />
+<text x="50%" y="50%" style="fill:#fff" text-anchor="middle" font-size="50" dominant-baseline="middle" font-family="roboto,arial,sans-serif">${count}</text>
+</svg>`;
+        const title = `Cluster of ${count} markers`, 
+        // adjust zIndex to be above other markers
+        zIndex = Number(google.maps.Marker.MAX_ZINDEX) + count;
+        //if (markerClusterer.MarkerUtils.isAdvancedMarkerAvailable(map)) {
+            if (map.getMapCapabilities().isAdvancedMarkersAvailable) {
+            // create cluster SVG element
+            const div = document.createElement("div");
+            div.innerHTML = svg;
+            const svgEl = div.firstElementChild;
+            svgEl.setAttribute("transform", "translate(0 25)");
+            const clusterOptions = {
+                map,
+                position,
+                zIndex,
+                title,
+                content: svgEl,
+            };
+            return new google.maps.marker.AdvancedMarkerElement(clusterOptions);
+        }
+        const clusterOptions = {
+            position,
+            zIndex,
+            title,
+            icon: {
+                url: `data:image/svg+xml;base64,${btoa(svg)}`,
+                anchor: new google.maps.Point(25, 25),
+            },
+        };
+        return new google.maps.Marker(clusterOptions);
+    }
+
+    // Add a marker clusterer to manage the markers.
+    new markerClusterer.MarkerClusterer({ 
+        map: map,
+        markers: markers,
+        renderer: customRenderer
+    });
+}
+
+async function initMap(api_url) {
+    // Request needed libraries.
+    const { Map, InfoWindow } = await google.maps.importLibrary("maps");
+    const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
+
+    // Storing response
+    const response = await fetch(api_url);
+   
+    // Storing data in form of JSON
+    var data = await response.json();
+
+    console.log(data);
+
+    var latlngList = [];
+    for (i = 0; i < data.length; i++) {  
+        latlngList.push(new google.maps.LatLng(data[i]['lat'], data[i]['lng']));
+
+        var bounds = new google.maps.LatLngBounds();
+        latlngList.forEach(function(n) {
+            bounds.extend(n);
+        });
+    }
+
+    map = new Map(document.getElementById("map"), {
+      mapId: "MAP_VIEW",
+    });
+    map.setCenter(bounds.getCenter()); //or use custom center
+    map.fitBounds(bounds);
+
+    var data_online = [];
+    var data_offline = [];
+    var data_problem = [];
+
+    for (i = 0; i < data.length; i++) {  
+        if (data[i]['is_online'])
+            if (data[i]['is_problem'])
+                data_problem.push(data[i]);
+            else
+                data_online.push(data[i])
+        else
+            data_offline.push(data[i]);
+    }
+
+    drawMarker(data_online, map);
+    drawMarker(data_offline, map);
+    drawMarker(data_problem, map);
+
+}
+
+{% if user.is_superuser %}
+    const api_url = "{{ settings.WAGTAILADMIN_BASE_URL }}/api/members/get_all";
+{% elif user.organization.is_no_org %}
+    const api_url = "{{ settings.WAGTAILADMIN_BASE_URL }}/api/members/get_by_user/{{ user.id }}";
+{% else %}
+    const api_url = "{{ settings.WAGTAILADMIN_BASE_URL }}/api/members/get_by_org/{{ user.organization.id }}";
+{% endif %}
+
+initMap(api_url);
+setInterval(function() {
+    // your code goes here...
+    initMap(api_url);
+}, {{ settings.MAP_REFRESH_INTERVAL }} * 60 * 1000); // every 5 minutes
+//initMap(api_url);
+
+</script>

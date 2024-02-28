@@ -1,0 +1,4 @@
+#!/bin/bash
+#source .env
+
+gunicorn -c config/gunicorn.py --error-logfile logs/error.log --access-logfile logs/access.log config.wsgi

@@ -1,0 +1,1 @@
+0 * * * * python /app/manage.py shell --command "from config.workers import sync_data; sync_data('https://manage.backone.cloud')" 

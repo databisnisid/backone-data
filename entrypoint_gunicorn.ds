@@ -1,0 +1,7 @@
+#!/bin/sh
+#source .env
+
+python manage.py collectstatic --noinput
+python manage.py migrate
+
+gunicorn -c config/gunicorn_docker.py config.wsgi

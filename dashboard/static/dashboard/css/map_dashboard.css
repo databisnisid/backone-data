@@ -1,0 +1,76 @@
+#map {
+  height: 700px;
+  width: 100%;
+}
+
+#legend {
+  font-family: Robot,Arial,sans-serif;
+  background: #fff;
+  padding: 10px;
+  margin: 10px;
+  border: 2px solid #fff;
+  border-radius: 3px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.3);
+}
+
+#legend h3 {
+  margin-top: 0;
+  color: black;
+  text-align: center;
+}
+
+#legend img {
+  vertical-align: middle;
+}
+
+@keyframes drop {
+  0% {
+    transform: translateY(-200px) scaleY(0.9);
+    opacity: 0;
+  }
+  5% {
+    opacity: 0.7;
+  }
+  50% {
+    transform: translateY(0px) scaleY(1);
+    opacity: 1;
+  }
+  65% {
+    transform: translateY(-17px) scaleY(0.9);
+    opacity: 1;
+  }
+  75% {
+    transform: translateY(-22px) scaleY(0.9);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0px) scaleY(1);
+    opacity: 1;
+  }
+}
+.drop {
+  animation: drop 0.3s linear forwards var(--delay-time);
+}
+
+@keyframes fadeInAnimation {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.fadeInAnimation {
+  animation: fadeInAnimation ease 3s linear forwards;
+}
+
+@keyframes bounce {
+	0%, 20%, 50%, 80%, 100% {transform: translateY(0);}
+	40% {transform: translateY(-30px);}
+	60% {transform: translateY(-15px);}
+}
+.bounce {
+  animation: bounce 2s ease infinite;
+  animation-delay: var(--bounce-delay-time);
+}
