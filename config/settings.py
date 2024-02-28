@@ -181,8 +181,10 @@ MEDIA_URL = '/media/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Custom User Model
 AUTH_USER_MODEL = 'accounts.User'
 
+# Custom User Model - Wagtail Integration
 WAGTAIL_USER_EDIT_FORM = 'accounts.forms.CustomUserEditForm'
 WAGTAIL_USER_CREATION_FORM = 'accounts.forms.CustomUserCreationForm'
 WAGTAIL_USER_CUSTOM_FIELDS = ['organization']
@@ -196,20 +198,20 @@ WAGTAIL_ENABLE_WHATS_NEW_BANNER = False
 # AXES
 AXES_COOLOFF_TIME = float(os.getenv('AXES_COOLOFF_TIME', 2))
 AXES_RESET_ON_SUCCESS = True
-#AXES_LOCKOUT_PARAMETERS = ['ip_address', 'username']
 AXES_LOCKOUT_PARAMETERS = ['username']
 AXES_LOCKOUT_TEMPLATE = 'axes/block.html'
 AXES_IPWARE_PROXY_COUNT = int(os.getenv('AXES_IPWARE_PROXY_COUNT', 0))
-#AXES_IPWARE_META_PRECEDENCE_ORDER = [
 
 
 # GOOGLE_MAPS
 GOOGLE_MAPS_V3_APIKEY = str(os.getenv('GOOGLE_MAPS_V3_APIKEY'))
 MAP_CENTER = str(os.getenv('MAP_CENTER', "{lat: -1.233982000061532, lng: 116.83728437200422}"))
 MAP_ZOOM = int(os.getenv('MAP_ZOOM', 5))
+
 # MAP DASHBOARD - IN SECONDS
 MAP_REFRESH_INTERVAL = int(os.getenv('MAP_REFRESH_INTERVAL', 300))
 
+# GEO Widget
 GEO_WIDGET_DEFAULT_LOCATION = {'lat': -6.175349682264274, 'lng': 106.82715256580741}
 GEO_WIDGET_ZOOM = int(os.getenv('GEO_WIDGET_ZOOM', '15'))
 
