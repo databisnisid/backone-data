@@ -235,6 +235,7 @@ function drawMarker(key) {
             '<div id="bodyContent">' +
             '<p style="color: black;">' + data_marker['address'] + '</p>' +
             '<p style="color: black;">' + data_marker['network'] + '</p>' +
+            '<p style="color: black;">' + data_marker['services'] + '</p>' +
             '<a href="/members/members/?q=' + data_marker['member_id'] + '">CHECK</a>' +
             '</div>' +
             '</div>';
