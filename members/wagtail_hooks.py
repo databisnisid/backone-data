@@ -2,6 +2,7 @@ from wagtail.contrib.modeladmin.options import (
     ModelAdmin, ModelAdminGroup, PermissionHelper, modeladmin_register)
 from wagtail.admin.panels import FieldPanel, MultiFieldPanel, FieldRowPanel, InlinePanel
 from django.utils.translation import gettext_lazy as _
+from django.utils import timezone
 from wagtailgeowidget import geocoders
 from wagtailgeowidget.panels import GeoAddressPanel, GoogleMapsPanel
 from .models import Members
@@ -56,13 +57,22 @@ class MembersAdmin(ModelAdmin):
                 ])
             ]
 
+    def get_list_display(self, request):
+        if request.user.is_superuser:
+            list_display = ('name_with_network', 'address', 'online_at', 'offline_at')
+        else:
+            list_display = ('name_with_network', 'address', 'online_at')
+         
+        return list_display
+
     def get_queryset(self, request):
         #qs = Members.objects.none()
         if request.user.is_superuser:
             qs = Members.objects.all()
         else:
             networks = request.user.organization.networks.all()
-            qs = Members.objects.filter(network__in=networks)
+            qs = Members.objects.filter(network__in=networks, offline_at__isnull=True) | Members.objects.filter(network__in=networks, offline_at__gt=timezone.now())
+            #qs = Members.objects.filter(network__in=networks)
             '''
             for network in request.user.organization.networks.all():
                 print(network)

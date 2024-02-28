@@ -2,6 +2,7 @@ import random
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.conf import settings
+from django.utils import timezone
 from accounts.models import User, Organizations
 from .models import Members
 
@@ -50,7 +51,7 @@ def get_members_by_user(request, user):
         members = Members.objects.all()
     else:
         networks = user.organization.networks.all()
-        members = Members.objects.filter(network__in=networks)
+        members = Members.objects.filter(network__in=networks, offline_at__isnull=True) | Members.objects.filter(network__in=networks, offline_at__gt=timezone.now())
 
     members_data = prepare_data(members)
 
