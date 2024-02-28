@@ -10,8 +10,8 @@ class Links(models.Model):
 
     class Meta:
         db_table = 'links'
-        verbose_name = 'Link'
-        verbose_name_plural = 'Links'
+        verbose_name = _('Service')
+        verbose_name_plural = _('Services')
 
     def __str__(self):
         return '%s' % self.name
