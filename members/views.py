@@ -38,7 +38,12 @@ def prepare_data(members):
         member_geo['network'] = member.network.name
         member_geo['lat'] = lat
         member_geo['lng'] = lng
-        member_geo['is_online'] = 1
+
+        # Online or Offline
+        member_geo['is_online'] = 0
+        if member.offline_at is None or member.offline_at <= timezone.now():
+            member_geo['is_online'] = 1
+
         new_members.append(member_geo)
 
     return randomize_coordinate(new_members)
