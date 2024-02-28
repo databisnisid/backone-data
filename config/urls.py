@@ -4,7 +4,7 @@ from django.conf import settings
 from wagtail.admin import urls as wagtailadmin_urls
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    path('django-admin/', admin.site.urls),
     path('api/members/', include('members.urls')),
     path('', include(wagtailadmin_urls)),
 ]

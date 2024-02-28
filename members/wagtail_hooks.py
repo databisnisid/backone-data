@@ -56,14 +56,17 @@ class MembersAdmin(ModelAdmin):
                 FieldPanel('offline_at', read_only=True),
                 ]),
 
-            FieldPanel('upload_baa'),
+            FieldRowPanel([
+                FieldPanel('links'),
+                FieldPanel('upload_baa'),
+                ])
             ]
 
     def get_list_display(self, request):
         if request.user.is_superuser:
-            list_display = ('name_with_network', 'address', 'online_at', 'offline_at', 'upload_baa')
+            list_display = ('name_with_network', 'address', 'online_at', 'offline_at', 'get_links', 'upload_baa')
         else:
-            list_display = ('name_with_network', 'address', 'online_at', 'upload_baa')
+            list_display = ('name_with_network', 'address', 'online_at', 'get_links', 'upload_baa')
          
         return list_display
 

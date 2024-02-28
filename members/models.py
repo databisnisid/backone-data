@@ -1,10 +1,14 @@
 from django.db import models
+from modelcluster.models import ClusterableModel
+from modelcluster.fields import ParentalManyToManyField
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from networks.models import Networks
+from links.models import Links
 
 
-class Members(models.Model):
+#class Members(models.Model):
+class Members(ClusterableModel):
     name = models.CharField(_('Member Name'), max_length=50)
     member_code = models.CharField(_('Member Code'), max_length=20, blank=True, null=True)
     description = models.TextField(_('Description'), blank=True)
@@ -23,7 +27,10 @@ class Members(models.Model):
         verbose_name=_('Network'),
     )
 
+    links = ParentalManyToManyField(Links, related_name='members')
+
     upload_baa = models.FileField(_('BAA'), upload_to='baa/', blank=True, null=True)
+
 
     '''
     user = models.ForeignKey(
@@ -63,5 +70,13 @@ class Members(models.Model):
         return text
 
     name_with_network.short_description = _('Site Name')
+    name_with_network.admin_order_field = 'name'
+
+
+    def get_links(self):
+        return list(self.links.all())
+
+    get_links.short_description = _('Links')
+    get_links.admin_order_field = 'links'
 
 

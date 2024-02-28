@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'accounts',
     'members',
     'networks',
+    'links',
     'wagtail.contrib.forms',
     'wagtail.contrib.redirects',
     'wagtail.embeds',
