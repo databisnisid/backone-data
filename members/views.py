@@ -1,4 +1,5 @@
 import random
+import time
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.conf import settings
@@ -40,10 +41,11 @@ def prepare_data(members):
         member_geo['lng'] = lng
 
         # Online or Offline
+        offline_at = time.strptime(member.offline_at)
         member_geo['is_online'] = 0
         if member.offline_at is None:
             member_geo['is_online'] = 1
-        elif member.offline_at <= timezone.now():
+        elif offline_at <= timezone.now():
             member_geo['is_online'] = 1
 
         new_members.append(member_geo)
