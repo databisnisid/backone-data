@@ -3,7 +3,7 @@ from django.utils.translation import gettext_lazy as _
 
 
 class Links(models.Model):
-    name = models.CharField(_('Link'), max_length=100)
+    name = models.CharField(_('Name'), max_length=100)
 
     created_at = models.DateTimeField(auto_now=False, auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True, auto_now_add=False)
