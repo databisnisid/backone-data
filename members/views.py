@@ -41,7 +41,9 @@ def prepare_data(members):
 
         # Online or Offline
         member_geo['is_online'] = 0
-        if member.offline_at is None or member.offline_at <= timezone.now():
+        if member.offline_at is None:
+            member_geo['is_online'] = 1
+        if member.offline_at <= timezone.now():
             member_geo['is_online'] = 1
 
         new_members.append(member_geo)
