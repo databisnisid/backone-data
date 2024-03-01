@@ -94,7 +94,7 @@ class Members(ClusterableModel):
 
 
     def address_and_services(self):
-        text = format_html('{}{}', self.address, self.get_links_html())
+        text = format_html('{}<br />{}', self.address, self.get_links_html())
         return text
 
     address_and_services.short_description = _('Address and Services')
