@@ -1,7 +1,7 @@
 from django.db import models
 from modelcluster.models import ClusterableModel
 from modelcluster.fields import ParentalManyToManyField
-from django.utils.html import format_html
+from django.utils.html import format_html, format_html_join
 from django.utils.translation import gettext_lazy as _
 from networks.models import Networks
 from links.models import Links
@@ -75,7 +75,8 @@ class Members(ClusterableModel):
     name_with_network.admin_order_field = 'name'
 
     def name_with_parameters(self):
-        text = format_html('{}<br /><small>{}</small><br /><small>{}</small>', self.name, self.network, self.member_id)
+        text = format_html('{}<br /><small>{}</small>', self.name, self.get_links_html())
+        #text = format_html('{}<br /><small>{}</small><br /><small>{}</small>', self.name, self.network, self.member_id)
         return text
 
     name_with_parameters.short_description = _('Site Name')
@@ -94,7 +95,9 @@ class Members(ClusterableModel):
 
 
     def address_and_services(self):
-        text = format_html('{}<br />{}', self.address, self.get_links_html())
+        #svc_text = format_html_join('\n', '<li>{}</li>', ([p.name for p in self.links.all()]))
+        #text = format_html('{}<br /><ul>{}</ul>', self.address, svc_text)
+        text = format_html('{}<br /><small>{}</small>', self.address, self.get_links_html())
         return text
 
     address_and_services.short_description = _('Address and Services')
