@@ -3,6 +3,7 @@ from modelcluster.models import ClusterableModel
 from modelcluster.fields import ParentalManyToManyField
 from django.utils.html import format_html, format_html_join
 from django.utils.translation import gettext_lazy as _
+from django.conf import settings
 from networks.models import Networks
 from links.models import Links
 
@@ -102,5 +103,16 @@ class Members(ClusterableModel):
 
     address_and_services.short_description = _('Address and Services')
     address_and_services.admin_order_field = 'address'
+
+    def baa_file(self):
+        text = format_html("<img src='{}/static/members/images/notfound.png' width='40'>", settings.WAGTAILADMIN_BASE_URL)
+        if self.upload_baa:
+            media_url = settings.WAGTAILADMIN_BASE_URL + settings.MEDIA_URL + str(self.upload_baa)
+            text = format_html("<a href='{}'><img src='{}/static/members/images/file.png' width='50'></a>", media_url, settings.WAGTAILADMIN_BASE_URL)
+
+        return text
+
+    baa_file.short_description = _('BAA')
+    baa_file.admin_order_field = 'upload_baa'
 
 

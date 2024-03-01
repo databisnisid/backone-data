@@ -66,9 +66,9 @@ class MembersAdmin(ModelAdmin):
 
     def get_list_display(self, request):
         if request.user.is_superuser:
-            list_display = ('name_with_parameters', 'address', 'network', 'online_at', 'offline_at', 'upload_baa', 'notes')
+            list_display = ('name_with_parameters', 'address', 'network', 'online_at', 'offline_at', 'baa_file', 'notes')
         else:
-            list_display = ('name_with_parameters', 'address', 'network', 'online_at', 'upload_baa', 'notes')
+            list_display = ('name_with_parameters', 'address', 'network', 'online_at', 'baa_file', 'notes')
          
         return list_display
 
