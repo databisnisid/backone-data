@@ -63,18 +63,18 @@ class MembersAdmin(ModelAdmin):
                 ])
             ]
 
-    '''
     def get_list_display(self, request):
         if request.user.is_superuser:
-            list_display_superuser = ('name_with_parameters', 'address', 'online_at', 'offline_at', 'get_links', 'upload_baa')
+            list_display = ('name_with_parameters', 'address', 'online_at', 'offline_at', 'get_links', 'upload_baa')
+        else:
+            list_display = ('name_with_network', 'address', 'online_at', 'get_links', 'upload_baa')
          
-        return list_display_superuser
-    '''
+        return list_display
 
     def get_queryset(self, request):
         #qs = Members.objects.none()
         if request.user.is_superuser:
-            qs = Members.objects.all().distinct()
+            qs = Members.objects.all()
         else:
             networks = request.user.organization.networks.all()
             qs = Members.objects.filter(network__in=networks, offline_at__isnull=True) | Members.objects.filter(network__in=networks, offline_at__gt=timezone.now())

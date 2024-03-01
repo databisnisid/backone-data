@@ -87,6 +87,6 @@ class Members(ClusterableModel):
 
 
     get_links.short_description = _('Services')
-    get_links.admin_order_field = 'links'
+    #get_links.admin_order_field = 'links'
 
 
