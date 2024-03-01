@@ -79,7 +79,7 @@ class Members(ClusterableModel):
         #text = format_html('{}<br /><small>{}</small><br /><small>{}</small>', self.name, self.network, self.member_id)
         return text
 
-    name_with_parameters.short_description = _('Site Name')
+    name_with_parameters.short_description = _('Site')
     name_with_parameters.admin_order_field = 'name'
 
 
