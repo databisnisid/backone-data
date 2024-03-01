@@ -47,7 +47,8 @@ def prepare_data(members):
         elif member.offline_at >= timezone.now():
             member_geo['is_online'] = 1
 
-        member_geo['services'] = ', '.join(member.get_links())
+        #member_geo['services'] = ', '.join(member.get_links())
+        member_geo['services'] = member.get_links()
         #print(', '.join(str(member.get_links())))
 
         new_members.append(member_geo)

@@ -28,6 +28,7 @@ class Members(ClusterableModel):
     )
 
     links = ParentalManyToManyField(Links, related_name='members')
+    #links = models.ManyToManyField(Links, related_name='members')
 
     upload_baa = models.FileField(_('BAA'), upload_to='baa/', blank=True, null=True)
 
@@ -81,7 +82,9 @@ class Members(ClusterableModel):
 
 
     def get_links(self):
-        return list(self.links.all().values_list('name', flat=True))
+        return ", ".join([p.name for p in self.links.all()])
+        #return self.links.all().values_list('name', flat=True)
+
 
     get_links.short_description = _('Services')
     get_links.admin_order_field = 'links'

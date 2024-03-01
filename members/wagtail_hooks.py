@@ -37,7 +37,7 @@ class MembersAdmin(ModelAdmin):
     inspect_view_enabled = True
     add_to_settings_menu = False
     exclude_from_explorer = False
-    list_display = ('name_with_network', 'address', 'online_at')
+    list_display = ('name_with_network', 'address', 'online_at', 'get_links', 'upload_baa')
     search_fields = ('name', 'network__name', 'member_id')
     #list_filter = ('network',)
     list_per_page = 100
@@ -63,18 +63,18 @@ class MembersAdmin(ModelAdmin):
                 ])
             ]
 
+    '''
     def get_list_display(self, request):
         if request.user.is_superuser:
-            list_display = ('name_with_parameters', 'address', 'online_at', 'offline_at', 'get_links', 'upload_baa')
-        else:
-            list_display = ('name_with_network', 'address', 'online_at', 'get_links', 'upload_baa')
+            list_display_superuser = ('name_with_parameters', 'address', 'online_at', 'offline_at', 'get_links', 'upload_baa')
          
-        return list_display
+        return list_display_superuser
+    '''
 
     def get_queryset(self, request):
         #qs = Members.objects.none()
         if request.user.is_superuser:
-            qs = Members.objects.all()
+            qs = Members.objects.all().distinct()
         else:
             networks = request.user.organization.networks.all()
             qs = Members.objects.filter(network__in=networks, offline_at__isnull=True) | Members.objects.filter(network__in=networks, offline_at__gt=timezone.now())
