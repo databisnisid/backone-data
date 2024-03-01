@@ -72,6 +72,13 @@ class Members(ClusterableModel):
     name_with_network.short_description = _('Site Name')
     name_with_network.admin_order_field = 'name'
 
+    def name_with_parameters(self):
+        text = format_html('{}<br /><small>{}</small><br /><small>{}</small>', self.name, self.network, self.member_id)
+        return text
+
+    name_with_parameters.short_description = _('Site Name')
+    name_with_parameters.admin_order_field = 'name'
+
 
     def get_links(self):
         return list(self.links.all().values_list('name', flat=True))

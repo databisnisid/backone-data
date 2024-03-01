@@ -35,3 +35,18 @@ class Networks(models.Model):
         return '%s' % self.name
 
 
+'''
+class NetworksGroup(models.Model):
+    name = models.CharField(_('Network Group'), max_lenth=50)
+
+    created_at = models.DateTimeField(auto_now=False, auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True, auto_now_add=False)
+
+    class Meta:
+        db_table = 'networks_group'
+        verbose_name = _('Network Group')
+        verbose_name_plural = _('Networks Group')
+
+    def __str__(self):
+        return '%s' % self.name
+'''
