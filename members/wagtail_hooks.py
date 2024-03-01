@@ -37,7 +37,7 @@ class MembersAdmin(ModelAdmin):
     inspect_view_enabled = True
     add_to_settings_menu = False
     exclude_from_explorer = False
-    list_display = ('name_with_network', 'address', 'online_at', 'upload_baa')
+    list_display = ('name_with_network', 'address', 'online_at', 'get_links', 'upload_baa')
     search_fields = ('name', 'network__name', 'member_id')
     #list_filter = ('network',)
     list_per_page = 100
