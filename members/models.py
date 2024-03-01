@@ -74,7 +74,7 @@ class Members(ClusterableModel):
 
 
     def get_links(self):
-        return list(self.links.all())
+        return list(self.links.all().values_list('name', flat=True))
 
     get_links.short_description = _('Services')
     get_links.admin_order_field = 'links'
