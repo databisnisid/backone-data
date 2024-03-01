@@ -33,7 +33,7 @@ class LinksPermissionHelper(PermissionHelper):
 class LinksAdmin(ModelAdmin):
     model = Links
     menu_labels = _('Services')
-    menu_icon = 'link'
+    menu_icon = 'link-external'
     add_to_settings_menu = False
     exclude_from_explorer = False
     list_display = ('name',)
