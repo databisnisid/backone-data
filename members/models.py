@@ -32,6 +32,7 @@ class Members(ClusterableModel):
 
     upload_baa = models.FileField(_('BAA'), upload_to='baa/', blank=True, null=True)
 
+    notes = models.TextField(_('Notes'), blank=True)
 
     '''
     user = models.ForeignKey(

@@ -38,7 +38,7 @@ class MembersAdmin(ModelAdmin):
     add_to_settings_menu = False
     exclude_from_explorer = False
     list_display = ('name_with_network', 'address', 'online_at', 'get_links', 'upload_baa')
-    search_fields = ('name', 'network__name', 'member_id')
+    search_fields = ('name', 'network__name', 'member_id', 'notes')
     #list_filter = ('network',)
     list_per_page = 100
     permission_helper_class = MembersPermissionHelper
@@ -60,14 +60,15 @@ class MembersAdmin(ModelAdmin):
             FieldRowPanel([
                 FieldPanel('links'),
                 FieldPanel('upload_baa'),
-                ])
+                ]),
+            FieldPanel('notes'),
             ]
 
     def get_list_display(self, request):
         if request.user.is_superuser:
-            list_display = ('name_with_parameters', 'address', 'online_at', 'offline_at', 'get_links', 'upload_baa')
+            list_display = ('name_with_parameters', 'address', 'online_at', 'offline_at', 'get_links', 'upload_baa', 'notes')
         else:
-            list_display = ('name_with_network', 'address', 'online_at', 'get_links', 'upload_baa')
+            list_display = ('name_with_network', 'address', 'online_at', 'get_links', 'upload_baa', 'notes')
          
         return list_display
 
