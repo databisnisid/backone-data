@@ -34,6 +34,7 @@ class MembersAdmin(ModelAdmin):
     model = Members
     menu_labels = _('Members')
     menu_icon = 'globe'
+    inspect_view_enabled = True
     add_to_settings_menu = False
     exclude_from_explorer = False
     list_display = ('name_with_network', 'address', 'online_at')
@@ -64,7 +65,7 @@ class MembersAdmin(ModelAdmin):
 
     def get_list_display(self, request):
         if request.user.is_superuser:
-            list_display = ('name_with_network', 'address', 'online_at', 'offline_at', 'get_links', 'upload_baa')
+            list_display = ('name_with_parameters', 'address', 'online_at', 'offline_at', 'get_links', 'upload_baa')
         else:
             list_display = ('name_with_network', 'address', 'online_at', 'get_links', 'upload_baa')
          
