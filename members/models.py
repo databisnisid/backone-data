@@ -116,3 +116,10 @@ class Members(ClusterableModel):
     baa_file.admin_order_field = 'upload_baa'
 
 
+    def address_multiline(self):
+        text = format_html(self.address.replace(',', '<br />'))
+        return text
+    address_multiline.short_description = _('Address')
+    address_multiline.admin_order_field = 'address'
+
+
