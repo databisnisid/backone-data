@@ -38,7 +38,7 @@ class MembersAdmin(ModelAdmin):
     add_to_settings_menu = False
     exclude_from_explorer = False
     list_display = ('name_with_network', 'address_multiline', 'online_at', 'get_links', 'upload_baa')
-    search_fields = ('name', 'network__name', 'member_id', 'notes')
+    search_fields = ('name', 'network__name', 'member_id', 'notes', 'invoice_number', 'network__network_group__name')
     #list_filter = ('network',)
     list_per_page = 100
     permission_helper_class = MembersPermissionHelper

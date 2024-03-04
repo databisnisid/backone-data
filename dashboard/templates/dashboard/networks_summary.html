@@ -27,9 +27,17 @@
         {% for key, value in networks.items %}
             <tr>
                 <td style="text-align: center;">
+                    {% if key != "Ungroup" %}
+                    <a href="members/members/?q={{ key|urlencode }}">
                     <h1 style="font-size: 1.5em;">
                     {{ key }}
                     </h1>
+                    </a>
+                    {% else %}
+                    <h1 style="font-size: 1.5em;">
+                    {{ key }}
+                    </h1>
+                    {% endif %}
                 </td>
                 <td style="text-align: center;">
                     <h1 style="font-size: 1.5em;">
