@@ -128,16 +128,14 @@ class MembersAdmin(ModelAdmin):
             group_finance = []
 
         custom_panels = basic_panels
-        #if user.groups.all() in group_support or user.is_superuser:
-        if user.objects.filter(groups__in=group_support) or user.is_superuser:
+        if user.groups.all() in group_support or user.is_superuser:
+        #if user.objects.filter(groups__in=group_support) or user.is_superuser:
             custom_panels.append(support_panels)
 
-        #if user.groups in group_sales:
-        if user.objects.filter(groups__in=group_sales) or user.is_superuser:
+        if user.groups.all() in group_sales:
             custom_panels.append(sales_panels)
 
-        #if user.groups in group_finance:
-        if user.objects.filter(groups__in=group_finance) or user.is_superuser:
+        if user.groups.all() in group_finance:
             custom_panels.append(finance_panels)
 
         return ObjectList(custom_panels)
