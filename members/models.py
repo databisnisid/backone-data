@@ -123,3 +123,15 @@ class Members(ClusterableModel):
     address_multiline.admin_order_field = 'address'
 
 
+    def network_group(self):
+        if self.network:
+            if self.network.network_group:
+                return self.network.network_group
+            else:
+                return self.network.name
+        else:
+            return None
+
+    network_group.short_description = _('Networks')
+    network_group.admin_order_field = 'networks'
+
