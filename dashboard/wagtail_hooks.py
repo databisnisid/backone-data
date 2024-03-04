@@ -3,6 +3,8 @@
 #from wagtail.admin.ui.components import Component
 from django.core.exceptions import ObjectDoesNotExist
 from wagtail import hooks
+
+from dashboard.summary_panels import NetworksPanelSummary
 #from networks.models import Networks, NetworkRoutes
 #from members.models import Members
 #from crum import get_current_user
@@ -81,6 +83,7 @@ def add_another_welcome_panel(request, panels):
     panels[:] = [panel for panel in panels if panel.name != "locked_pages"]
 
     panels.append(MapSummaryPanel())
+    panels.append(NetworksPanelSummary())
 
 '''
 

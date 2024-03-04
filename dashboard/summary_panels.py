@@ -2,7 +2,9 @@ from wagtail.admin.ui.components import Component
 from django.conf import settings
 from crum import get_current_user
 from django.utils.translation import gettext as _
+from django.db.models import Count
 from networks.models import Networks, NetworksGroup
+from accounts.models import User
 from members.models import Members
 
 
@@ -28,5 +30,32 @@ class NetworksPanelSummary(Component):
 
     def __init__(self):
         user = get_current_user()
+        if user is None:
+            user = User.objects.get(id=1)
         self.user = user
+        if user.is_superuser:
+            networks_count = Members.objects.all().values('network__network_group__name').annotate(networks_count=Count('network'))
+        else:
+            networks_group = user.organization.networks.all()
+            networks_count = Members.objects.filter(network__in=networks_group).values('network__network_group__name').annotate(networks_count=Count('network'))
 
+        self.networks_count = {}
+        for net_count in networks_count:
+            if net_count['network__network_group__name']:
+                net_name = net_count['network__network_group__name']
+            else:
+                net_name = 'Ungroup'
+
+            try:
+                self.networks_count[net_name] += net_count['networks_count']
+            except KeyError:
+                self.networks_count[net_name] = net_count['networks_count']
+
+
+    def get_context_data(self, parent_context):
+        context = super().get_context_data(parent_context)
+        context['settings'] = settings
+        context['user'] = self.user
+        context['networks'] = self.networks_count
+
+        return context
