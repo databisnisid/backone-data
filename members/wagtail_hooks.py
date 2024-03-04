@@ -56,16 +56,19 @@ class MembersAdmin(ModelAdmin):
 
             FieldRowPanel([
                 FieldPanel('links'),
-                FieldPanel('upload_baa'),
+                MultiFieldPanel([
+                    FieldPanel('upload_baa'),
+                    FieldPanel('invoice_number'),
+                    ])
                 ]),
             FieldPanel('notes'),
             ]
 
     def get_list_display(self, request):
         if request.user.is_superuser:
-            list_display = ('name_with_parameters', 'address_multiline', 'network_group', 'online_at', 'offline_at', 'baa_file', 'notes')
+            list_display = ('name_with_parameters', 'address_multiline', 'network_group', 'online_at', 'offline_at', 'baa_file', 'invoice_number', 'notes')
         else:
-            list_display = ('name_with_parameters', 'address_multiline', 'network_group', 'online_at', 'baa_file', 'notes')
+            list_display = ('name_with_parameters', 'address_multiline', 'network_group', 'online_at', 'baa_file', 'invoice_number', 'notes')
          
         return list_display
 

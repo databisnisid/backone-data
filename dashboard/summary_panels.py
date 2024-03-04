@@ -2,6 +2,8 @@ from wagtail.admin.ui.components import Component
 from django.conf import settings
 from crum import get_current_user
 from django.utils.translation import gettext as _
+from networks.models import Networks, NetworksGroup
+from members.models import Members
 
 
 class MapSummaryPanel(Component):
@@ -19,4 +21,12 @@ class MapSummaryPanel(Component):
 
         return context
 
+
+class NetworksPanelSummary(Component):
+    order = 20
+    template_name = "dashboard/networks_summary.html"
+
+    def __init__(self):
+        user = get_current_user()
+        self.user = user
 
