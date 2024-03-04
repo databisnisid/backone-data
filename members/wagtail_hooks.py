@@ -134,7 +134,7 @@ class MembersAdmin(ModelAdmin):
         #if user.objects.filter(groups__in=group_support) or user.is_superuser:
         #    custom_panels.append(support_panels)
 
-        if user.groups.all() in group_sales:
+        if group_sales in user.groups.all():
             custom_panels.append(sales_panels)
 
         #if user.groups.all() in group_finance:
