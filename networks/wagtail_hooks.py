@@ -33,7 +33,7 @@ class NetworksAdmin(ModelAdmin):
     add_to_settings_menu = False
     exclude_from_explorer = False
     list_display = ('name', 'network_id', 'network_group')
-    search_fields = ('name', ) 
+    search_fields = ('name', 'network_id',) 
     list_filter = ('network_group',)
     list_per_page = 100
     permission_helper_class = NetworksPermissionHelper
