@@ -122,8 +122,6 @@ class MembersAdmin(ModelAdmin):
         except ObjectDoesNotExist:
             group_sales = []
 
-        print(group_sales)
-
         try:
             group_finance = Group.objects.get(name='Finance')
         except ObjectDoesNotExist:
