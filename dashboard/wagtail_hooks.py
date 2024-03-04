@@ -1,6 +1,7 @@
 #from django.http import HttpRequest
 #from django.utils.safestring import mark_safe
 #from wagtail.admin.ui.components import Component
+from django.core.exceptions import ObjectDoesNotExist
 from wagtail import hooks
 #from networks.models import Networks, NetworkRoutes
 #from members.models import Members
@@ -9,6 +10,7 @@ from wagtail import hooks
 from .summary_panels import *
 #from django.utils.html import format_html
 from django.utils.translation import gettext as _
+from django.contrib.auth.models import Group
 #from axes.models import AccessAttempt, AccessLog, AccessFailureLog
 #from wagtail.snippets.models import register_snippet
 #from wagtail.snippets.views.snippets import SnippetViewSet, SnippetViewSetGroup
@@ -30,7 +32,12 @@ def hide_snippets_menu_item(request, menu_items):
     menu_items[:] = [item for item in menu_items if item.name != 'images']
     menu_items[:] = [item for item in menu_items if item.name != 'help']
 
-    if not request.user.is_superuser:
+    try:
+        group_support = Group.objects.get(name='Support')
+    except ObjectDoesNotExist:
+        group_support = []
+
+    if not request.user.is_superuser or request.user.group not in group_support:
         menu_items[:] = [item for item in menu_items if item.name != 'networks']
 
     '''

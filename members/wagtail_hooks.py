@@ -1,10 +1,13 @@
+from crum import get_current_user
+from django.core.exceptions import ObjectDoesNotExist
 from wagtail.contrib.modeladmin.options import (
     ModelAdmin, ModelAdminGroup, PermissionHelper, modeladmin_register)
-from wagtail.admin.panels import FieldPanel, MultiFieldPanel, FieldRowPanel, InlinePanel
+from wagtail.admin.panels import FieldPanel, MultiFieldPanel, FieldRowPanel, InlinePanel, ObjectList
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 from wagtailgeowidget import geocoders
 from wagtailgeowidget.panels import GeoAddressPanel, GoogleMapsPanel
+from django.contrib.auth.models import Group
 from .models import Members
 
 
@@ -40,6 +43,7 @@ class MembersAdmin(ModelAdmin):
     list_per_page = 100
     permission_helper_class = MembersPermissionHelper
 
+    '''
     panels = [
             MultiFieldPanel([
                 FieldPanel('name', read_only=True),
@@ -63,6 +67,78 @@ class MembersAdmin(ModelAdmin):
                 ]),
             FieldPanel('notes'),
             ]
+    '''
+
+    def get_edit_handler(self):
+        basic_panels = [
+                FieldPanel('name', read_only=True),
+                FieldPanel('network', read_only=True),
+                FieldPanel('address', read_only=True),
+                FieldRowPanel([
+                    FieldPanel('online_at', read_only=True),
+                    FieldPanel('offline_at', read_only=True),
+                ])
+                ]
+
+        sales_panels = MultiFieldPanel([
+                FieldRowPanel([
+                    FieldPanel('links'),
+                    MultiFieldPanel([
+                        FieldPanel('upload_baa'),
+                        FieldPanel('invoice_number', read_only=True),
+                        ])
+                    ]),
+                FieldPanel('notes')])
+
+        finance_panels = MultiFieldPanel([
+                FieldRowPanel([
+                    FieldPanel('links', read_only=True),
+                    MultiFieldPanel([
+                        FieldPanel('upload_baa', read_only=True),
+                        FieldPanel('invoice_number'),
+                        ])
+                    ]),
+                FieldPanel('notes', read_only=True)])
+
+        support_panels = MultiFieldPanel([
+                FieldRowPanel([
+                    FieldPanel('links', read_only=True),
+                    MultiFieldPanel([
+                        FieldPanel('upload_baa', read_only=True),
+                        FieldPanel('invoice_number', read_only=True),
+                        ])
+                    ]),
+                FieldPanel('notes', read_only=True)])
+
+        user = get_current_user()
+
+        try:
+            group_support = Group.objects.get(name='Support')
+        except ObjectDoesNotExist:
+            group_support = []
+
+        try:
+            group_sales = Group.objects.get(name='Sales')
+        except ObjectDoesNotExist:
+            group_sales = []
+
+        try:
+            group_finance = Group.objects.get(name='Finance')
+        except ObjectDoesNotExist:
+            group_finance = []
+
+        custom_panels = basic_panels
+        if user.groups in group_support or user.is_superuser:
+            custom_panels.append(support_panels)
+
+        if user.groups in group_sales:
+            custom_panels.append(sales_panels)
+
+        if user.groups in group_finance:
+            custom_panels.append(finance_panels)
+
+        return ObjectList(custom_panels)
+
 
     def get_list_display(self, request):
         if request.user.is_superuser:
