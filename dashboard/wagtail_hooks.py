@@ -41,8 +41,8 @@ def hide_snippets_menu_item(request, menu_items):
     if not request.user.is_superuser:
         menu_items[:] = [item for item in menu_items if item.name != 'networks']
 
-    if not request.user.groups.all() in group_support:
-        menu_items[:] = [item for item in menu_items if item.name != 'networks']
+    #if not request.user.groups.all() in group_support:
+    #    menu_items[:] = [item for item in menu_items if item.name != 'networks']
 
     '''
     if not request.user.is_superuser:
