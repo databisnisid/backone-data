@@ -129,7 +129,7 @@ class Members(ClusterableModel):
     def network_group(self):
         if self.network:
             if self.network.network_group:
-                return self.network.network_group
+                return self.network.network_group.name
             else:
                 return 'Ungroup'
         else:
