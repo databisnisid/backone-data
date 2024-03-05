@@ -1,0 +1,51 @@
+{% load i18n wagtailadmin_tags %}
+    <section class="panel summary nice-padding">
+        <h2 class="visuallyhidden">{% trans "Site summary" %}</h2>
+        <table style="width: 90%">
+            <tr>
+                <td style="text-align: center;">
+                    <h1 style="font-size: 2.5em;">
+                    Network Group
+                    </h1>
+                </td>
+                <td style="text-align: center;">
+                    <h1 style="font-size: 2.5em;">
+                    Members
+                    </h1>
+                </td>
+                <td style="text-align: center;">
+                    <h1 style="font-size: 2.5em;">
+                    BAAs
+                    </h1>
+                </td>
+            </tr>
+        {% for key, value in networks.items %}
+            <tr>
+                <td style="text-align: center;">
+                    {% if key != "Ungroup" %}
+                    <a href="members/members/?q={{ key|urlencode }}">
+                    <h1 style="font-size: 1.5em;">
+                    {{ key }}
+                    </h1>
+                    </a>
+                    {% else %}
+                    <h1 style="font-size: 1.5em;">
+                    {{ key }}
+                    </h1>
+                    {% endif %}
+                </td>
+                <td style="text-align: center;">
+                    <h1 style="font-size: 1.5em;">
+                    {{ value.total }}
+                    </h1>
+                </td>
+                <td style="text-align: center;">
+                    <h1 style="font-size: 1.5em;">
+                    {{ value.baa }}
+                    </h1>
+                </td>
+            </tr>
+        {% endfor %}
+        </table>
+    </section>
+    <hr />
