@@ -37,7 +37,7 @@ class NetworksPanelSummary(Component):
             networks_count = Members.objects.all().values('network__id', 'network__network_group__name').annotate(networks_count=Count('network'))
         else:
             networks_group = user.organization.networks.all()
-            networks_count = Members.objects.filter(network__in=networks_group).values('network__network_group__name').annotate(networks_count=Count('network'))
+            networks_count = Members.objects.filter(network__in=networks_group).values('network__id', 'network__network_group__name').annotate(networks_count=Count('network'))
 
         self.networks_count = {}
         self.networks_summary = []
