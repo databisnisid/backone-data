@@ -44,13 +44,19 @@ class NetworksPanelSummary(Component):
             self.template_name = 'dashboard/networks_summary_external.html'
 
         if user.is_superuser:
-            networks_count = Members.objects.all().values('network__id', 'network__network_group__name').annotate(networks_count=Count('network'))
+            networks_count = Members.objects.all().values(
+                    'network__id', 'network__network_group__name'
+                    ).annotate(networks_count=Count('network'))
         else:
             networks_group = user.organization.networks.all()
-            networks_count = Members.objects.filter(network__in=networks_group).values('network__id', 'network__network_group__name').annotate(networks_count=Count('network'))
+            networks_count = Members.objects.filter(
+                    network__in=networks_group
+                    ).values(
+                            'network__id', 'network__network_group__name'
+                            ).annotate(networks_count=Count('network'))
 
         self.networks_count = {}
-        self.networks_summary = []
+
         for net_count in networks_count:
             if net_count['network__network_group__name']:
                 net_name = net_count['network__network_group__name']
@@ -66,11 +72,15 @@ class NetworksPanelSummary(Component):
                         'invoice': 0
                         }
 
-            member_baa = Members.objects.filter(network__id=net_count['network__id']).exclude(upload_baa__in=['', None]).count()
+            member_baa = Members.objects.filter(
+                    network__id=net_count['network__id']
+                    ).exclude(upload_baa__in=['', None]).count()
             self.networks_count[net_name]['baa'] += member_baa
 
 
-            member_invoice = Members.objects.filter(network__id=net_count['network__id']).exclude(invoice_number__isnull=True).count()
+            member_invoice = Members.objects.filter(
+                    network__id=net_count['network__id']
+                    ).exclude(invoice_number__isnull=True).count()
             self.networks_count[net_name]['invoice'] += member_invoice
 
     def get_context_data(self, parent_context):
