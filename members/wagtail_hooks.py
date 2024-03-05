@@ -155,13 +155,6 @@ class MembersAdmin(ModelAdmin):
         else:
             networks = request.user.organization.networks.all()
             qs = Members.objects.filter(network__in=networks, offline_at__isnull=True) | Members.objects.filter(network__in=networks, offline_at__gt=timezone.now())
-            #qs = Members.objects.filter(network__in=networks)
-            '''
-            for network in request.user.organization.networks.all():
-                print(network)
-                qs_net = Members.objects.filter(network=network)
-                qs = qs | qs_net
-            '''
 
         return qs
 
