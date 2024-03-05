@@ -11,7 +11,7 @@
     {% fragment as header_title %}
         {% block branding_welcome %}
         {% if user.organization %}
-            {{ user.organization.name %}
+            {{ user.organization.name }}
         {% else %}
             {{ site_name }} Dashboard
         {% endif %}
