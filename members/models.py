@@ -131,7 +131,7 @@ class Members(ClusterableModel):
             if self.network.network_group:
                 return self.network.network_group
             else:
-                return self.network.name
+                return 'Ungroup'
         else:
             return None
 

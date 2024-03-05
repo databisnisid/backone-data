@@ -9,7 +9,13 @@
 
 {% block content %}
     {% fragment as header_title %}
-        {% block branding_welcome %}{% blocktrans trimmed %}{{ site_name }}{% endblocktrans %}{% endblock %}
+        {% block branding_welcome %}
+        {% if user.organization %}
+            {{ user.organization.name %}
+        {% else %}
+            {{ site_name }} Dashboard
+        {% endif %}
+        {% endblock %}
     {% endfragment %}
 
 

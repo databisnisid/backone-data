@@ -36,7 +36,10 @@ def prepare_data(members):
         member_geo['name'] = member.name
         member_geo['member_id'] = member.member_id
         member_geo['address'] = member.address
-        member_geo['network'] = member.network.name
+
+        member_geo['network'] = 'Ungroup'
+        if member.network.network_group:
+            member_geo['network'] = member.network.network_group.name
         member_geo['lat'] = lat
         member_geo['lng'] = lng
 

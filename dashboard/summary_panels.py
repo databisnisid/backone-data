@@ -1,8 +1,10 @@
+from django.core.exceptions import ObjectDoesNotExist
 from wagtail.admin.ui.components import Component
 from django.conf import settings
 from crum import get_current_user
 from django.utils.translation import gettext as _
 from django.db.models import Count
+from django.contrib.auth.models import Group
 from networks.models import Networks, NetworksGroup
 from accounts.models import User
 from members.models import Members
@@ -33,6 +35,14 @@ class NetworksPanelSummary(Component):
         if user is None:
             user = User.objects.get(id=1)
         self.user = user
+        try:
+            group_external = Group.objects.get(name='External')
+        except ObjectDoesNotExist:
+            group_external = []
+
+        if group_external in user.groups.all():
+            self.template_name = 'dashboard/networks_summary_external.html'
+
         if user.is_superuser:
             networks_count = Members.objects.all().values('network__id', 'network__network_group__name').annotate(networks_count=Count('network'))
         else:
