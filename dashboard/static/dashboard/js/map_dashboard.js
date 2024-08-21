@@ -25,7 +25,7 @@ var marker_property = {
         //'count': 0,
     },
     'is_online': {
-        'title': 'ONLINE',
+        'title': 'ACTIVE',
         'markerColor': '#009900', // Yellow
         'glyph': "/static/dashboard/images/backone-white-trans.svg",
         //'glyphColor': "white",
@@ -41,7 +41,7 @@ var marker_property = {
         //'count': 0,
     },
     'is_offline': {
-        'title': 'OFFLINE',
+        'title': 'DISMANTLE',
         'markerColor': '#ff0000', // Yellow
         'glyph': "/static/dashboard/images/backone-white-trans.svg",
         //'glyphColor': "black",
