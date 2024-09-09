@@ -84,6 +84,8 @@ class Members(ClusterableModel):
 
         if self.service_line:
             text = format_html('{}<br /><small>{}</small>', text, self.service_line)
+        if self.quota_string:
+            text = format_html('{}<br /><small>{}</small>', text, self.quota_string)
         return text
 
     name_with_parameters.short_description = _('Site')
