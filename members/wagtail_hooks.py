@@ -34,7 +34,7 @@ class MembersAdmin(ModelAdmin):
     model = Members
     menu_labels = _('Members')
     menu_icon = 'globe'
-    #inspect_view_enabled = True
+    inspect_view_enabled = True
     add_to_settings_menu = False
     exclude_from_explorer = False
     list_display = ('name_with_network', 'address_multiline', 'online_at', 'get_links', 'upload_baa')
