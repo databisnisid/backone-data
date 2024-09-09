@@ -141,3 +141,13 @@ class Members(ClusterableModel):
     network_group.short_description = _('Networks')
     network_group.admin_order_field = 'networks'
 
+    def name_with_service_line(self):
+        text = self.name
+        if service_line:
+            text = format_html('{}<br /><small>{}</small>', text, self.service_line)
+
+        return text
+
+    name_with_service_line.short_description = _('Site')
+    name_with_service_line.admin_order_field = 'name'
+
