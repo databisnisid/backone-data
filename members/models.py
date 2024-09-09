@@ -81,7 +81,9 @@ class Members(ClusterableModel):
 
     def name_with_parameters(self):
         text = format_html('{}<br /><small>{}</small>', self.name, self.get_links_html())
-        #text = format_html('{}<br /><small>{}</small><br /><small>{}</small>', self.name, self.network, self.member_id)
+
+        if self.service_line:
+            text = format_html('{}<br /><small>{}</small>', text, self.service_line)
         return text
 
     name_with_parameters.short_description = _('Site')
@@ -140,14 +142,4 @@ class Members(ClusterableModel):
 
     network_group.short_description = _('Networks')
     network_group.admin_order_field = 'networks'
-
-    def name_with_service_line(self):
-        text = self.name
-        if service_line:
-            text = format_html('{}<br /><small>{}</small>', text, self.service_line)
-
-        return text
-
-    name_with_service_line.short_description = _('Site')
-    name_with_service_line.admin_order_field = 'name'
 
