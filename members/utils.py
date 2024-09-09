@@ -49,7 +49,7 @@ def get_members_by_net(domain_api, network_id):
                 member = Members.objects.get(member_id=member_id)
 
             except ObjectDoesNotExist:
-                print(resp_json['fields'])
+                print(resp_json)
                 member = Members()
                 member.member_id = member_id
 
