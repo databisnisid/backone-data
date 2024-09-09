@@ -31,6 +31,7 @@ def get_members_by_net(domain_api, network_id):
             member_online_at=resp_json['online_at']
             member_offline_at=resp_json['offline_at']
             member_service_line=resp_json['mobile_number_first']
+            member_quota_string=resp_json['mqtt']['quota_first']
 
             '''
             member_name=resp_json['fields']['name']
@@ -62,6 +63,7 @@ def get_members_by_net(domain_api, network_id):
             member.offline_at = member_offline_at
             member.service_line = member_service_line
             member.network = network
+            member.quota_string = member_quota_string
             member.save()
 
     except ObjectDoesNotExist:
