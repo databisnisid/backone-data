@@ -36,6 +36,8 @@ class Members(ClusterableModel):
 
     notes = models.TextField(_('Notes'), blank=True)
 
+    service_line = models.CharField(_('Service Line'), max_length=20, blank=True, null=True)
+
     '''
     user = models.ForeignKey(
         User,

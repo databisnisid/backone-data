@@ -29,6 +29,8 @@ def get_members_by_net(domain_api, network_id):
             member_location=resp_json['fields']['location']
             member_online_at=resp_json['fields']['online_at']
             member_offline_at=resp_json['fields']['offline_at']
+            member_service_line=resp_json['fields']['mobile_number_first']
+
 
             try:
                 member = Members.objects.get(member_id=member_id)
@@ -45,6 +47,7 @@ def get_members_by_net(domain_api, network_id):
             member.location = member_location
             member.online_at = member_online_at
             member.offline_at = member_offline_at
+            member.service_line = member_service_line
             member.network = network
             member.save()
 
