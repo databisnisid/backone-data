@@ -79,13 +79,29 @@ class Members(ClusterableModel):
     name_with_network.short_description = _('Site Name')
     name_with_network.admin_order_field = 'name'
 
+    def get_quota_type(self) -> str:
+        quota_type : str = ''
+        if self.quota_string:
+            quota_split = self.quota_string.split('/')
+
+            try:
+                quota_split[3]
+                quota_type = quota_split[3]
+
+            except (IndexError or ValueError):
+                pass
+
+        return quota_type
+
+            
+
     def name_with_parameters(self):
         text = format_html('{}<br /><small>{}</small>', self.name, self.get_links_html())
 
-        #if self.service_line:
-        #    text = format_html('{}<br /><small>{}</small>', text, self.service_line)
-        #if self.quota_string:
-        #    text = format_html('{}<br /><small>{}</small>', text, self.quota_string)
+        if self.service_line and self.get_quota_type().lower() in settings.QUOTA_TYPE:
+            text = format_html('{}<br /><small>{}</small>', text, self.service_line)
+            if self.quota_string:
+                text = format_html('{}<br /><small>{}</small>', text, self.quota_string)
         return text
 
     name_with_parameters.short_description = _('Site')
