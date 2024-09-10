@@ -95,6 +95,7 @@ class Members(ClusterableModel):
 
     def get_quota_string_no_total(self) -> str:
         quota_string : str = ''
+        #quota_string, quota_current, quota_day, quota_type = ''
 
         if self.quota_string:
             quota_split = self.quota_string.split('/')
@@ -108,14 +109,14 @@ class Members(ClusterableModel):
 
             try:
                 quota_split[2]
-                quota_day = quota_day[2]
+                quota_day = quota_split[2]
 
             except (IndexError or ValueError):
                 quota_day = ''
             
             try:
                 quota_split[3]
-                quota_type = quota_day[3]
+                quota_type = quota_split[3]
 
             except (IndexError or ValueError):
                 quota_type = ''
