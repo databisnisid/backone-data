@@ -93,7 +93,36 @@ class Members(ClusterableModel):
 
         return quota_type
 
+    def get_quota_string_no_total(self) -> str:
+        quota_string : str = ''
+
+        if self.quota_string:
+            quota_split = self.quota_string.split('/')
+
+            try:
+                quota_split[0]
+                quota_current = quota_split[0]
+
+            except (IndexError or ValueError):
+                quota_current = ''
+
+            try:
+                quota_split[2]
+                quota_day = quota_day[2]
+
+            except (IndexError or ValueError):
+                quota_day = ''
             
+            try:
+                quota_split[3]
+                quota_type = quota_day[3]
+
+            except (IndexError or ValueError):
+                quota_type = ''
+
+            quota_string = '{}/{}/{}'.format(quota_current, quota_day, quota_type)
+
+        return quota_string.upper()
 
     def name_with_parameters(self):
         text = format_html('{}<br /><small>{}</small>', self.name, self.get_links_html())
@@ -101,7 +130,8 @@ class Members(ClusterableModel):
         if self.service_line and self.get_quota_type().lower() in settings.QUOTA_TYPE:
             text = format_html('{}<br /><small>{}</small>', text, self.service_line)
             if self.quota_string:
-                text = format_html('{}<br /><small>{}</small>', text, self.quota_string.upper())
+                text = format_html('{}<br /><small>{}</small>', text, self.get_quota_string_no_total())
+                #text = format_html('{}<br /><small>{}</small>', text, self.quota_string.upper())
         return text
 
     name_with_parameters.short_description = _('Site')
