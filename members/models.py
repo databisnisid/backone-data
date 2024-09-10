@@ -101,7 +101,7 @@ class Members(ClusterableModel):
         if self.service_line and self.get_quota_type().lower() in settings.QUOTA_TYPE:
             text = format_html('{}<br /><small>{}</small>', text, self.service_line)
             if self.quota_string:
-                text = format_html('{}<br /><small>{}</small>', text, self.quota_string)
+                text = format_html('{}<br /><small>{}</small>', text, self.quota_string.upper())
         return text
 
     name_with_parameters.short_description = _('Site')
