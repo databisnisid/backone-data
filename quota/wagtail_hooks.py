@@ -78,7 +78,7 @@ class QuotaStarlinkAdmin(ModelAdmin):
             qs = MembersStarlink.objects.all()
         else:
             networks = request.user.organization.networks.all()
-            qs = MembersStarlink.objects.filter(network__in=networks, offline_at__isnull=True) | Members.objects.filter(network__in=networks, offline_at__gt=timezone.now())
+            qs = MembersStarlink.objects.filter(network__in=networks, offline_at__isnull=True) | MembersStarlink.objects.filter(network__in=networks, offline_at__gt=timezone.now())
 
         return qs
 
