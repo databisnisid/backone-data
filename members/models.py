@@ -61,8 +61,8 @@ class Members(ClusterableModel):
     
     class Meta:
         db_table = 'members'
-        verbose_name = 'Member'
-        verbose_name_plural = 'Members'
+        verbose_name = 'Site'
+        verbose_name_plural = 'Sites'
 
 
     def __str__(self):
