@@ -129,7 +129,7 @@ class Members(ClusterableModel):
 
             quota_usage = -1 * float(quota_total.replace('GB', '')) + float(quota_current.replace('GB', ''))
 
-        return str(round(quota_usage,2)) + 'GB'
+        return str(round(quota_usage,2) * -1) + 'GB'
 
     get_quota_usage.short_description = _('Penggunaan Kuota')
 
