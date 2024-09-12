@@ -111,7 +111,7 @@ class Members(ClusterableModel):
 
         return quota_current
 
-    get_quota_current.short_description = _('Pemakaian Kuota')
+    get_quota_current.short_description = _('Sisa Kuota')
 
 
     def get_quota_day(self) -> str:
