@@ -34,6 +34,7 @@ class Members(ClusterableModel):
     upload_baa = models.FileField(_('BAA'), upload_to='baa/', blank=True, null=True)
     invoice_number = models.CharField(_('Invoice Number'), max_length=50, blank=True, null=True)
 
+    #member_sid = models.TextField(_('SID'), blank=True)
     notes = models.TextField(_('Notes'), blank=True)
 
     service_line = models.CharField(_('Service Line'), max_length=20, blank=True, null=True)
@@ -92,6 +93,41 @@ class Members(ClusterableModel):
                 pass
 
         return quota_type
+
+    get_quota_type.short_description = _('Quota Type')
+
+    def get_quota_current(self) -> str:
+        quota_current : str = ''
+        if self.quota_string:
+            quota_split = self.quota_string.split('/')
+
+            try:
+                quota_split[0]
+                quota_current = quota_split[0]
+
+            except (IndexError or ValueError):
+                pass
+
+        return quota_current
+
+    get_quota_current.short_description = _('Quota Current')
+
+    def get_quota_day(self) -> str:
+        quota_day : str = ''
+        if self.quota_string:
+            quota_split = self.quota_string.split('/')
+
+            try:
+                quota_split[2]
+                quota_day = quota_split[2]
+
+            except (IndexError or ValueError):
+                pass
+
+        return quota_day
+
+    get_quota_day.short_description = _('Quota Day')
+
 
     def get_quota_string_no_total(self) -> str:
         quota_string : str = ''
