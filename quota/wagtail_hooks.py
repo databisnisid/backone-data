@@ -66,7 +66,7 @@ class QuotaStarlinkAdmin(ModelAdmin):
     inspect_view_enabled = False
     add_to_settings_menu = False
     exclude_from_explorer = False
-    list_display = ('service_line', 'get_quota_current', 'get_quota_day', 'name')
+    list_display = ('service_line', 'get_quota_usage', 'get_quota_current', 'get_quota_day', 'name')
     search_fields = ('name', 'service_line', 'quota_string' ) 
     #list_filter = ('network',)
     list_per_page = 100

@@ -114,6 +114,25 @@ class Members(ClusterableModel):
     get_quota_current.short_description = _('Sisa Kuota')
 
 
+    def get_quota_usage(self) -> str:
+        quota_current : str = ''
+        if self.quota_string:
+            quota_split = self.quota_string.split('/')
+            quota_current = self.get_quota_current()
+
+            try:
+                quota_split[1]
+                quota_total = quota_split[1]
+
+            except (IndexError or ValueError):
+                pass
+
+            quota_usage = -1 * float(quota_total.replace('GB', '')) + float(quota_current.replace('GB', ''))
+
+        return str(round(quota_usage,2)) + 'GB'
+
+    get_quota_usage.short_description = _('Penggunaan Kuota')
+
     def get_quota_day(self) -> str:
         quota_day : str = ''
         if self.quota_string:
