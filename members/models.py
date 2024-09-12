@@ -1,5 +1,5 @@
 from django.db import models
-from modelcluster.models import ClusterableModel
+from modelcluster.models import ClusterableModel, ParentalKey
 from modelcluster.fields import ParentalManyToManyField
 from django.utils.html import format_html, format_html_join
 from django.utils.translation import gettext_lazy as _
@@ -96,6 +96,7 @@ class Members(ClusterableModel):
 
     get_quota_type.short_description = _('Quota Type')
 
+
     def get_quota_current(self) -> str:
         quota_current : str = ''
         if self.quota_string:
@@ -110,7 +111,8 @@ class Members(ClusterableModel):
 
         return quota_current
 
-    get_quota_current.short_description = _('Quota Current')
+    get_quota_current.short_description = _('Pemakaian Kuota')
+
 
     def get_quota_day(self) -> str:
         quota_day : str = ''
@@ -126,7 +128,7 @@ class Members(ClusterableModel):
 
         return quota_day
 
-    get_quota_day.short_description = _('Quota Day')
+    get_quota_day.short_description = _('Sisa Kuota Hari')
 
 
     def get_quota_string_no_total(self) -> str:
