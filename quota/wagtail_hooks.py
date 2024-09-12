@@ -77,5 +77,6 @@ class QuotaAdminGroup(ModelAdminGroup):
     items = (QuotaDpiAdmin, QuotaStarlinkAdmin)
     menu_icon = 'info-circle'
 
-modeladmin_register(QuotaDpiAdmin)
+
+modeladmin_register(QuotaAdminGroup)
 
