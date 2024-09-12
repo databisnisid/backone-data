@@ -215,7 +215,7 @@ class QuotaStarlinkAdmin(ModelAdmin):
     inspect_view_enabled = False
     add_to_settings_menu = False
     exclude_from_explorer = False
-    list_display = ('service_line', 'query_current', 'quota_day', 'name')
+    list_display = ('service_line', 'get_quota_current', 'get_quota_day', 'name')
     search_fields = ('name', 'service_line', 'quota_string' ) 
     #list_filter = ('network',)
     list_per_page = 100
@@ -238,6 +238,7 @@ class QuotaAdminGroup(ModelAdminGroup):
     menu_icon = 'info-circle'
 
 
-modeladmin_register(QuotaAdminGroup)
 modeladmin_register(MembersAdmin)
+
+modeladmin_register(QuotaAdminGroup)
 
