@@ -53,7 +53,7 @@ class QuotaDpiAdmin(ModelAdmin):
             qs = MembersDpi.objects.all()
         else:
             networks = request.user.organization.networks.all()
-            qs = MembersDpi.objects.filter(network__in=networks, offline_at__isnull=True) | Members.objects.filter(network__in=networks, offline_at__gt=timezone.now())
+            qs = MembersDpi.objects.filter(network__in=networks, offline_at__isnull=True) | MembersDpi.objects.filter(network__in=networks, offline_at__gt=timezone.now())
 
         return qs
 
