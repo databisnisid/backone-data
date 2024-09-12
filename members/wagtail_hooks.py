@@ -88,6 +88,8 @@ class MembersAdmin(ModelAdmin):
         sales_panels = MultiFieldPanel([
                 FieldRowPanel([
                     FieldPanel('links'),
+                    FieldPanel('links'),
+                FieldRowPanel([
                     MultiFieldPanel([
                         FieldPanel('upload_baa'),
                         FieldPanel('invoice_number', read_only=True),
