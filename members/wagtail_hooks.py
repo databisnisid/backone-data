@@ -22,7 +22,10 @@ class MembersPermissionHelper(PermissionHelper):
         return False
 
     def user_can_delete_obj(self, user, obj):
-        return False
+        if user.is_superuser:
+            return True
+        else:
+            return False
 
     '''
     def user_can_edit_obj(self, user, obj):
