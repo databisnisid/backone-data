@@ -30,7 +30,7 @@ class QuotaPermissionHelper(PermissionHelper):
 
 class QuotaDpiAdmin(ModelAdmin):
     model = Members
-    menu_labels = _('Siab GSM')
+    menu_label = _('Siab GSM')
     menu_icon = 'tablet-alt'
     list_display_links = None
     inspect_view_enabled = False
@@ -42,6 +42,11 @@ class QuotaDpiAdmin(ModelAdmin):
     list_per_page = 100
     permission_helper_class = QuotaPermissionHelper
 
+    def get_list_display(self, request):
+        list_display = ('service_line', 'query_current', 'query_day', 'name')
+         
+        return list_display
+
     def get_queryset(self, request):
         #qs = Members.objects.none()
         networks = request.user.organization.networks.all()
@@ -52,7 +57,7 @@ class QuotaDpiAdmin(ModelAdmin):
 
 class QuotaStarlinkAdmin(ModelAdmin):
     model = Members
-    menu_labels = _('Starlink')
+    menu_label = _('Starlink')
     menu_icon = 'site'
     list_display_links = None
     inspect_view_enabled = False
@@ -79,4 +84,5 @@ class QuotaAdminGroup(ModelAdminGroup):
 
 
 modeladmin_register(QuotaAdminGroup)
+modeladmin_register(QuotaDpiAdmin)
 
