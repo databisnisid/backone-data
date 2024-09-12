@@ -192,7 +192,7 @@ class QuotaDpiAdmin(ModelAdmin):
     permission_helper_class = QuotaPermissionHelper
 
     def get_list_display(self, request):
-        list_display = ('service_line', 'quota_current', 'quota_day', 'name')
+        list_display = ('service_line', 'get_quota_current', 'get_quota_day', 'name')
          
         return list_display
 
