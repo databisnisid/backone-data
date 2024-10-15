@@ -90,7 +90,10 @@ def add_another_welcome_panel(request, panels):
     ]
     panels[:] = [panel for panel in panels if panel.name != "locked_pages"]
 
-    if request.user.groups.all()[0].name != "Quota Starlink":
+    if request.user.is_superuser:
+        panels.append(MapSummaryPanel())
+        panels.append(NetworksPanelSummary())
+    elif request.user.groups.all()[0].name != "Quota Starlink":
         panels.append(MapSummaryPanel())
         panels.append(NetworksPanelSummary())
 
