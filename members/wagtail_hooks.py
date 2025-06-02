@@ -181,10 +181,12 @@ class MembersAdmin(ModelAdmin):
 
         user = get_current_user()
 
+        """
         try:
             group_support = Group.objects.get(name="Support")
         except ObjectDoesNotExist:
             group_support = []
+        """
 
         try:
             group_sales = Group.objects.get(name="Sales")
@@ -207,7 +209,8 @@ class MembersAdmin(ModelAdmin):
         """
 
         custom_panels = basic_panels
-        if group_support in user.groups.all() or user.is_superuser:
+        # if group_support in user.groups.all() or user.is_superuser:
+        if user.groups.filter(name="Support").exists() or user.is_superuser:
             custom_panels.append(support_panels)
 
         if group_sales in user.groups.all():
