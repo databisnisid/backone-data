@@ -220,7 +220,10 @@ class MembersAdmin(ModelAdmin):
 
     def get_queryset(self, request):
         # qs = Members.objects.none()
-        if request.user.is_superuser:
+        if (
+            request.user.is_superuser
+            or request.user.groups.filter(name="Finance").exists()
+        ):
             qs = Members.objects.all()
         else:
             networks = request.user.organization.networks.all()
