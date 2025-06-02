@@ -210,6 +210,7 @@ class MembersAdmin(ModelAdmin):
                 "address_multiline",
                 "network_group",
                 "online_at",
+                "offline_at",
                 "baa_file",
                 "invoice_number",
                 "notes",
