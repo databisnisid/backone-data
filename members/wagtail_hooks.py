@@ -163,6 +163,22 @@ class MembersAdmin(ModelAdmin):
             ]
         )
 
+        external_panels = MultiFieldPanel(
+            [
+                FieldRowPanel(
+                    [
+                        FieldPanel("links", read_only=True),
+                        MultiFieldPanel(
+                            [
+                                FieldPanel("upload_baa", read_only=True),
+                                FieldPanel("invoice_number", read_only=True),
+                            ]
+                        ),
+                    ]
+                ),
+            ]
+        )
+
         user = get_current_user()
 
         try:
@@ -180,6 +196,16 @@ class MembersAdmin(ModelAdmin):
         except ObjectDoesNotExist:
             group_finance = []
 
+        """
+        try:
+            group_external = Group.objects.get(name="External")
+        except ObjectDoesNotExist:
+            try:
+                group_external = Group.objects.get(name="External Network")
+            except ObjectDoesNotExist:
+                group_external = []
+        """
+
         custom_panels = basic_panels
         if group_support in user.groups.all() or user.is_superuser:
             custom_panels.append(support_panels)
@@ -190,10 +216,16 @@ class MembersAdmin(ModelAdmin):
         if group_finance in user.groups.all():
             custom_panels.append(finance_panels)
 
+        external_group = ["External", "External Network"]
+        if user.groups.filter(name__in=external_group).exists():
+            custom_panels.append(external_panels)
+
         return ObjectList(custom_panels)
 
     def get_list_display(self, request):
-        if request.user.is_superuser:
+        # if request.user.is_superuser:
+        external_group = ["External", "External Network"]
+        if request.user.groups.filter(name__in=external_group).exists():
             list_display = (
                 "name_with_parameters",
                 "address_multiline",
@@ -202,7 +234,7 @@ class MembersAdmin(ModelAdmin):
                 "offline_at",
                 "baa_file",
                 "invoice_number",
-                "notes",
+                # "notes",
             )
         else:
             list_display = (
