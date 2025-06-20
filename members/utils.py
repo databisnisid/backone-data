@@ -33,11 +33,14 @@ def get_members_by_net(domain_api, network_id):
             member_online_at = resp_json["online_at"]
             member_offline_at = resp_json["offline_at"]
             member_service_line = resp_json["mobile_number_first"]
+            member_quota_string = resp_json["quota_first"]
 
+            """
             try:
                 member_quota_string = resp_json["mqtt"]["quota_first"]
             except TypeError:
                 member_quota_string = ""
+            """
 
             """
             member_name=resp_json['fields']['name']
