@@ -70,7 +70,7 @@ class MembersAdmin(ModelAdmin):
         "service_line",
     )
     # list_filter = ('network',)
-    list_per_page = 100
+    list_per_page = 25
     permission_helper_class = MembersPermissionHelper
 
     """
