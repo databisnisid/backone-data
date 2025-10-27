@@ -4,7 +4,7 @@ RUN rm -fr /etc/localtime
 RUN ln -s /usr/share/zoneinfo/Asia/Jakarta /etc/localtime
 RUN echo "Asia/Jakarta" > /etc/timezone
 
-RUN apk add --no-cache nodejs
+#RUN apk add --no-cache nodejs
 
 RUN apk add --no-cache mariadb-dev build-base
 
@@ -22,7 +22,7 @@ COPY requirements.txt /app
 RUN pip install --no-cache-dir  -r requirements.txt
 
 # copy project
-COPY . /app
+#COPY . /app
 
 # copy cronjobs
 COPY dockerize/cronjobs /etc/crontabs/root
