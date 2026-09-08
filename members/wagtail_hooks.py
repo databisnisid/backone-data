@@ -44,6 +44,7 @@ class MembersViewSet(SnippetViewSet):
             FieldPanel('service_line'),
             FieldPanel('name'),
             FieldPanel('member_id'),
+            FieldPanel('address'),
             FieldPanel('upload_baa'),
             FieldPanel('invoice_number'),
         ]
