@@ -54,7 +54,7 @@ INSTALLED_APPS = [
     'wagtail.admin',
     'wagtail',
     'wagtailgeowidget',
-    'wagtail_modeladmin',
+    
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',

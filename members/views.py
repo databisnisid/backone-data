@@ -1,5 +1,5 @@
 import random
-import time
+from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.conf import settings
@@ -28,7 +28,7 @@ def prepare_data(members):
             result = point[1].split(' ')
             lng = result[0].replace('POINT(', '')
             lat = result[1].replace(')', '')
-        except AttributeError:
+        except (AttributeError, IndexError):
             lat = settings.GEO_WIDGET_DEFAULT_LOCATION['lat'] + random.uniform(-0.0025, 0.0025)
             lng = settings.GEO_WIDGET_DEFAULT_LOCATION['lng'] + random.uniform(-0.0025, 0.0025)
 
@@ -57,6 +57,7 @@ def prepare_data(members):
     return randomize_coordinate(new_members)
 
 
+@login_required
 def get_members_by_user(request, user):
     user = User.objects.get(id=user)
 

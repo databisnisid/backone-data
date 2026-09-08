@@ -1,50 +1,25 @@
-from wagtail.contrib.modeladmin.options import (
-    ModelAdmin, ModelAdminGroup, PermissionHelper, modeladmin_register)
-from wagtail.admin.panels import FieldPanel, MultiFieldPanel, FieldRowPanel, InlinePanel
+from wagtail.snippets.views.snippets import SnippetViewSet
+from wagtail.snippets.models import register_snippet
+from wagtail.admin.panels import FieldPanel
 from django.utils.translation import gettext_lazy as _
-from django.utils import timezone
-from wagtailgeowidget import geocoders
-from wagtailgeowidget.panels import GeoAddressPanel, GoogleMapsPanel
 from .models import Links
 
 
-class LinksPermissionHelper(PermissionHelper):
-    '''
-
-    def user_can_list(self, user):
-        return True
-
-    def user_can_create(self, user):
-        if user.is_superuser:
-            return True
-        else:
-            return False
-    '''
-
-    def user_can_delete_obj(self, user, obj):
-            return False
-
-    '''
-    def user_can_edit_obj(self, user, obj):
-        return False
-    '''
-
-
-class LinksAdmin(ModelAdmin):
+class LinksViewSet(SnippetViewSet):
     model = Links
-    menu_labels = _('Services')
+    menu_label = 'Services'
     menu_icon = 'link-external'
-    add_to_settings_menu = False
-    exclude_from_explorer = False
+    add_to_admin_menu = True
+    menu_order = 300
     list_display = ('name',)
     search_fields = ('name',)
-    #list_filter = ('network',)
     list_per_page = 100
-    permission_helper_class = LinksPermissionHelper
-
     panels = [
-            FieldPanel('name'),
-            ]
+        FieldPanel('name'),
+    ]
 
-modeladmin_register(LinksAdmin)
+    def user_can_delete_obj(self, request, obj):
+        return False
 
+
+register_snippet(LinksViewSet)

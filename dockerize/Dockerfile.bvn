@@ -1,4 +1,4 @@
-FROM python:3.10-alpine
+FROM python:3.13-alpine
 
 RUN rm -fr /etc/localtime
 RUN ln -s /usr/share/zoneinfo/Asia/Jakarta /etc/localtime

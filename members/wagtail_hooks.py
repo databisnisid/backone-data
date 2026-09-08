@@ -1,11 +1,7 @@
 from crum import get_current_user
 from django.core.exceptions import ObjectDoesNotExist
-from wagtail.contrib.modeladmin.options import (
-    ModelAdmin,
-    ModelAdminGroup,
-    PermissionHelper,
-    modeladmin_register,
-)
+from wagtail.snippets.views.snippets import SnippetViewSet
+from wagtail.snippets.models import register_snippet
 from wagtail.admin.panels import (
     FieldPanel,
     MultiFieldPanel,
@@ -21,254 +17,137 @@ from django.contrib.auth.models import Group
 from .models import Members
 
 
-class MembersPermissionHelper(PermissionHelper):
-    """
-
-    def user_can_list(self, user):
-        return True
-
-    """
-
-    def user_can_create(self, user):
-        return False
-
-    def user_can_delete_obj(self, user, obj):
-        if user.is_superuser:
-            return True
-        else:
-            return False
-
-    """
-    def user_can_edit_obj(self, user, obj):
-        return False
-    """
-
-
-class MembersAdmin(ModelAdmin):
+class MembersViewSet(SnippetViewSet):
     model = Members
-    menu_label = "Sites"
-    menu_icon = "globe"
+    menu_label = 'Sites'
+    menu_icon = 'globe'
     inspect_view_enabled = True
+    add_to_admin_menu = True
     add_to_settings_menu = False
-    exclude_from_explorer = False
+    menu_order = 100
     list_display = (
-        "name_with_network",
-        "address_multiline",
-        "online_at",
-        "get_links",
-        "upload_baa",
+        'service_line',
+        'member_id',
+        'name',
+        'network',
+        'get_quota_current',
+        'get_quota_day',
+        'get_quota_type',
+        'get_quota_usage',
     )
     list_export = list_display
-    search_fields = (
-        "name",
-        "network__name",
-        "member_id",
-        "notes",
-        "invoice_number",
-        "quota_string",
-        "network__network_group__name",
-        "service_line",
-    )
-    # list_filter = ('network',)
+    search_fields = ('name', 'member_id', 'network__name', 'service_line')
     list_per_page = 25
-    permission_helper_class = MembersPermissionHelper
-
-    """
-    panels = [
-            MultiFieldPanel([
-                FieldPanel('name', read_only=True),
-                #FieldPanel('description', read_only=True),
-                FieldPanel('network', read_only=True),
-                ], heading=_('Site and Network')),
-            FieldPanel('address', read_only=True),
-            #GeoAddressPanel("address", geocoder=geocoders.GOOGLE_MAPS, read_only=True),
-            #GoogleMapsPanel('location', address_field='address', read_only=True),
-            FieldRowPanel([
-                FieldPanel('online_at', read_only=True),
-                FieldPanel('offline_at', read_only=True),
-                ]),
-
-            FieldRowPanel([
-                FieldPanel('links'),
-                MultiFieldPanel([
-                    FieldPanel('upload_baa'),
-                    FieldPanel('invoice_number'),
-                    ])
-                ]),
-            FieldPanel('notes'),
-            ]
-    """
 
     def get_edit_handler(self):
         basic_panels = [
-            FieldPanel("name", read_only=True),
-            FieldPanel("network", read_only=True),
-            FieldPanel("address", read_only=True),
-            FieldRowPanel(
-                [
-                    FieldPanel("online_at", read_only=True),
-                    FieldPanel("offline_at", read_only=True),
-                ]
-            ),
+            FieldPanel('service_line'),
+            FieldPanel('name'),
+            FieldPanel('member_id'),
+            FieldPanel('upload_baa'),
+            FieldPanel('invoice_number'),
         ]
 
-        sales_panels = MultiFieldPanel(
-            [
-                FieldRowPanel(
-                    [
-                        FieldPanel("links"),
-                        MultiFieldPanel(
-                            [
-                                FieldPanel("upload_baa"),
-                                FieldPanel("invoice_number", read_only=True),
-                            ]
-                        ),
-                    ]
-                ),
-                FieldPanel("notes"),
-            ]
-        )
-
-        finance_panels = MultiFieldPanel(
-            [
-                FieldRowPanel(
-                    [
-                        FieldPanel("links", read_only=True),
-                        MultiFieldPanel(
-                            [
-                                FieldPanel("upload_baa", read_only=True),
-                                FieldPanel("invoice_number"),
-                            ]
-                        ),
-                    ]
-                ),
-                FieldPanel("notes", read_only=True),
-            ]
-        )
-
-        support_panels = MultiFieldPanel(
-            [
-                FieldRowPanel(
-                    [
-                        FieldPanel("links", read_only=True),
-                        MultiFieldPanel(
-                            [
-                                FieldPanel("upload_baa", read_only=True),
-                                FieldPanel("invoice_number", read_only=True),
-                            ]
-                        ),
-                    ]
-                ),
-                FieldPanel("notes", read_only=True),
-            ]
-        )
-
-        external_panels = MultiFieldPanel(
-            [
-                FieldRowPanel(
-                    [
-                        FieldPanel("links", read_only=True),
-                        MultiFieldPanel(
-                            [
-                                FieldPanel("upload_baa", read_only=True),
-                                FieldPanel("invoice_number", read_only=True),
-                            ]
-                        ),
-                    ]
-                ),
-            ]
-        )
+        tabs = [
+            ObjectList(basic_panels, heading='Profile'),
+        ]
 
         user = get_current_user()
+        if user is not None and user.is_superuser:
+            tabs.append(
+                ObjectList(
+                    [
+                        MultiFieldPanel(
+                            [
+                                FieldPanel('network'),
+                                FieldPanel('links'),
+                                FieldPanel('quota_string'),
+                            ],
+                            heading='Network & Quota',
+                        ),
+                    ],
+                    heading='Network',
+                )
+            )
 
-        """
-        try:
-            group_support = Group.objects.get(name="Support")
-        except ObjectDoesNotExist:
-            group_support = []
-        """
-
-        try:
-            group_sales = Group.objects.get(name="Sales")
-        except ObjectDoesNotExist:
-            group_sales = []
-
-        try:
-            group_finance = Group.objects.get(name="Finance")
-        except ObjectDoesNotExist:
-            group_finance = []
-
-        """
-        try:
-            group_external = Group.objects.get(name="External")
-        except ObjectDoesNotExist:
-            try:
-                group_external = Group.objects.get(name="External Network")
-            except ObjectDoesNotExist:
-                group_external = []
-        """
-
-        custom_panels = basic_panels
-        # if group_support in user.groups.all() or user.is_superuser:
-        if user.groups.filter(name="Support").exists() or user.is_superuser:
-            custom_panels.append(support_panels)
-
-        if group_sales in user.groups.all():
-            custom_panels.append(sales_panels)
-
-        if group_finance in user.groups.all():
-            custom_panels.append(finance_panels)
-
-        external_group = ["External", "External Network"]
-        if user.groups.filter(name__in=external_group).exists():
-            custom_panels.append(external_panels)
-
-        return ObjectList(custom_panels)
-
-    def get_list_display(self, request):
-        # if request.user.is_superuser:
-        external_group = ["External", "External Network"]
-        if request.user.groups.filter(name__in=external_group).exists():
-            list_display = (
-                "name_with_parameters",
-                "address_multiline",
-                "network_group",
-                "online_at",
-                "offline_at",
-                "baa_file",
-                "invoice_number",
-                # "notes",
+            tabs.append(
+                ObjectList(
+                    [
+                        MultiFieldPanel(
+                            [
+                                GeoAddressPanel('location'),
+                                GoogleMapsPanel('location'),
+                            ],
+                            heading='Location',
+                        ),
+                    ],
+                    heading='Location',
+                )
             )
         else:
-            list_display = (
-                "name_with_parameters",
-                "address_multiline",
-                "network_group",
-                "online_at",
-                "offline_at",
-                "baa_file",
-                "invoice_number",
-                "notes",
+            tabs.append(
+                ObjectList(
+                    [
+                        MultiFieldPanel(
+                            [
+                                FieldPanel('network', read_only=True),
+                                FieldPanel('links', read_only=True),
+                            ],
+                            heading='Network & Quota',
+                        ),
+                    ],
+                    heading='Network',
+                )
             )
+            tabs.append(
+                ObjectList(
+                    [
+                        GoogleMapsPanel('location'),
+                    ],
+                    heading='Location',
+                )
+            )
+        return ObjectList(tabs).bind_to_model(self.model)
+
+
+    def get_list_display(self, request):
+        list_display = (
+            'service_line',
+            'member_id',
+            'name',
+            'network',
+            'get_quota_current',
+            'get_quota_day',
+            'get_quota_type',
+            'get_quota_usage',
+        )
 
         return list_display
 
     def get_queryset(self, request):
-        # qs = Members.objects.none()
         if (
             request.user.is_superuser
-            or request.user.groups.filter(name="Finance").exists()
+            or request.user.groups.filter(name='External').exists()
+            or request.user.groups.filter(name='External Network').exists()
         ):
-            qs = Members.objects.all()
+            return Members.objects.all()
         else:
-            networks = request.user.organization.networks.all()
+            try:
+                networks = request.user.organization.networks.all()
+            except ObjectDoesNotExist:
+                networks = []
             qs = Members.objects.filter(
                 network__in=networks, offline_at__isnull=True
             ) | Members.objects.filter(
                 network__in=networks, offline_at__gt=timezone.now()
             )
+            return qs
 
-        return qs
+    def user_can_create(self, request):
+        return False
+
+    def user_can_delete_obj(self, request, obj):
+        return request.user.is_superuser
 
 
-modeladmin_register(MembersAdmin)
+register_snippet(MembersViewSet)

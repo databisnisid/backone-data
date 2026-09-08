@@ -95,7 +95,7 @@ class Members(ClusterableModel):
                 quota_split[3]
                 quota_type = quota_split[3]
 
-            except IndexError or ValueError:
+            except (IndexError, ValueError):
                 pass
 
         return quota_type
@@ -111,7 +111,7 @@ class Members(ClusterableModel):
                 quota_split[0]
                 quota_current = quota_split[0]
 
-            except IndexError or ValueError:
+            except (IndexError, ValueError):
                 pass
 
         return quota_current
@@ -119,25 +119,22 @@ class Members(ClusterableModel):
     get_quota_current.short_description = _("Sisa Kuota")
 
     def get_quota_usage(self) -> str:
-        quota_current: str = ""
+        quota_usage = 0
         if self.quota_string:
             quota_split = self.quota_string.split("/")
             quota_current = self.get_quota_current()
 
             try:
-                quota_split[1]
                 quota_total = quota_split[1]
-
-            except IndexError or ValueError:
+            except (IndexError, ValueError):
                 pass
-
-            try:
-                quota_usage = -1 * float(quota_total.replace("GB", "")) + float(
-                    quota_current.replace("GB", "")
-                )
-
-            except ValueError:
-                quota_usage = 0
+            else:
+                try:
+                    quota_usage = -1 * float(quota_total.replace("GB", "")) + float(
+                        quota_current.replace("GB", "")
+                    )
+                except ValueError:
+                    quota_usage = 0
 
         return str(round(quota_usage, 2) * -1) + "GB"
 
@@ -152,7 +149,7 @@ class Members(ClusterableModel):
                 quota_split[2]
                 quota_day = quota_split[2]
 
-            except IndexError or ValueError:
+            except (IndexError, ValueError):
                 pass
 
         return quota_day
@@ -170,21 +167,21 @@ class Members(ClusterableModel):
                 quota_split[0]
                 quota_current = quota_split[0]
 
-            except IndexError or ValueError:
+            except (IndexError, ValueError):
                 quota_current = ""
 
             try:
                 quota_split[2]
                 quota_day = quota_split[2]
 
-            except IndexError or ValueError:
+            except (IndexError, ValueError):
                 quota_day = ""
 
             try:
                 quota_split[3]
                 quota_type = quota_split[3]
 
-            except IndexError or ValueError:
+            except (IndexError, ValueError):
                 quota_type = ""
 
             quota_string = "{}/{}/{}".format(quota_current, quota_day, quota_type)

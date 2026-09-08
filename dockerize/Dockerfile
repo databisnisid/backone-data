@@ -1,4 +1,4 @@
-FROM python:3.11-alpine
+FROM python:3.13-alpine
 
 RUN rm -fr /etc/localtime
 RUN ln -s /usr/share/zoneinfo/Asia/Jakarta /etc/localtime
@@ -22,7 +22,7 @@ COPY requirements.txt /app
 RUN pip install --no-cache-dir  -r requirements.txt
 
 # copy project
-#COPY . /app
+COPY . /app
 
 # copy cronjobs
 COPY dockerize/cronjobs /etc/crontabs/root
