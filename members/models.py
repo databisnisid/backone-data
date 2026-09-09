@@ -8,6 +8,27 @@ from networks.models import Networks
 from links.models import Links
 
 
+SDWAN_PACKAGE_CHOICES = [
+    ("BackOne - SDWAN Lite", "BackOne - SDWAN Lite"),
+    ("BackOne - SDWAN Pro", "BackOne - SDWAN Pro"),
+    ("BackOne - SDWAN Gateway", "BackOne - SDWAN Gateway"),
+    ("BackOne - Tanpa SDWAN", "BackOne - Tanpa SDWAN"),
+]
+
+BAA_STATUS_CHOICES = [
+    ("New Link", "New Link"),
+    ("Upgrade Link", "Upgrade Link"),
+    ("Downgrade Link", "Downgrade Link"),
+    ("Relokasi", "Relokasi"),
+]
+
+LINK_ROLE_CHOICES = [
+    ("MAIN", "MAIN"),
+    ("BACKUP", "BACKUP"),
+    ("SINGLE", "SINGLE"),
+]
+
+
 # class Members(models.Model):
 class Members(ClusterableModel):
     name = models.CharField(_("Member Name"), max_length=50)
@@ -26,8 +47,9 @@ class Members(ClusterableModel):
     network = models.ForeignKey(
         Networks,
         on_delete=models.CASCADE,
-        # limit_choices_to=limit_choices_to_current_user,
         verbose_name=_("Network"),
+        blank=True,
+        null=True,
     )
 
     links = ParentalManyToManyField(Links, related_name="members")
@@ -46,6 +68,31 @@ class Members(ClusterableModel):
     )
     quota_string = models.CharField(
         _("Quota Info"), max_length=50, blank=True, null=True
+    )
+
+    # Mockup Sites Dashboard — user-owned data (V4,V5,V6)
+    is_manual = models.BooleanField(_("Manual Site"), default=False)
+    ip_address = models.CharField(_("IP Address"), max_length=50, blank=True, null=True)
+    sdwan_package = models.CharField(
+        _("SDWAN Package"), max_length=30, choices=SDWAN_PACKAGE_CHOICES, blank=True, null=True
+    )
+    project_number = models.CharField(
+        _("Project Number"), max_length=50, blank=True, null=True
+    )
+    baa_status_category = models.CharField(
+        _("BAA Status Category"), max_length=20, choices=BAA_STATUS_CHOICES, blank=True, null=True
+    )
+    po_file_user = models.FileField(
+        _("PO from User"), upload_to="po/", blank=True, null=True
+    )
+    po_file_vendor = models.FileField(
+        _("PO to Vendor"), upload_to="po/", blank=True, null=True
+    )
+    invoice_file = models.FileField(
+        _("Invoice File"), upload_to="invoice/", blank=True, null=True
+    )
+    bap_file = models.FileField(
+        _("BAP Dismantle"), upload_to="bap/", blank=True, null=True
     )
 
     """
@@ -75,12 +122,22 @@ class Members(ClusterableModel):
         return "%s" % self.name
 
     def delete(self, *args, **kwargs):
-        if self.upload_baa:
-            self.upload_baa.delete()
+        for field_name in (
+            "upload_baa",
+            "po_file_user",
+            "po_file_vendor",
+            "invoice_file",
+            "bap_file",
+        ):
+            field = getattr(self, field_name, None)
+            if field:
+                field.delete()
         super().delete(*args, **kwargs)
 
     def name_with_network(self):
-        text = format_html("{}<br /><small>{}</small>", self.name, self.network)
+        text = format_html("{}<br />", self.name)
+        if self.network:
+            text = format_html("{}<small>{}</small>", text, self.network)
         return text
 
     name_with_network.short_description = _("Site Name")
@@ -269,3 +326,28 @@ class Members(ClusterableModel):
 
     network_group.short_description = _("Networks")
     network_group.admin_order_field = "networks"
+
+
+class MemberLink(models.Model):
+    """Multi-link detail for a site (mockup col B): MAIN/BACKUP/SINGLE with provider, capacity, SID."""
+
+    member = ParentalKey(Members, related_name="member_links", on_delete=models.CASCADE)
+    role = models.CharField(_("Link Role"), max_length=10, choices=LINK_ROLE_CHOICES, default="MAIN")
+    service = models.ForeignKey(
+        Links,
+        on_delete=models.SET_NULL,
+        verbose_name=_("Service"),
+        blank=True,
+        null=True,
+    )
+    provider = models.CharField(_("Provider"), max_length=50, blank=True, null=True)
+    capacity = models.CharField(_("Capacity"), max_length=20, blank=True, null=True)
+    sid = models.CharField(_("SID Langganan"), max_length=100, blank=True, null=True)
+
+    class Meta:
+        db_table = "members_link"
+        verbose_name = _("Member Link")
+        verbose_name_plural = _("Member Links")
+
+    def __str__(self):
+        return "%s %s - %s" % (self.role, self.service or "", self.provider or "")

@@ -1,0 +1,67 @@
+# Rancangan Sistem Manajemen Layanan Jaringan (Mockup Dashboard Sites)
+
+Dokumen ini memuat penjelasan fungsionalitas dari antarmuka (UI/UX) *Mockup Dashboard Sites* terbaru yang telah disesuaikan dengan kebutuhan alur operasional.
+
+## 1. Konsep Utama: Mode View vs Mode Edit
+Untuk menjaga antarmuka tetap bersih dan cepat dimuat (*fast-loading*), baris data pada tabel dipisahkan menjadi dua mode:
+- **View Mode:** Mode baca (*read-only*). Informasi disajikan dalam bentuk teks ringkas tanpa adanya elemen interaktif (*form*, *dropdown*, dsb.) untuk mencegah ketidaksengajaan perubahan data.
+- **Edit Mode:** Mode interaktif. Muncul ketika tombol "Ubah (Edit)" atau "Tambah Situs Baru" ditekan. Pada mode ini, staf dapat mengisi data sesuai izin (hak akses) dari divisi masing-masing.
+
+## 2. Penjelasan Detail Per Kolom
+
+### A. Situs & Address
+*   **Fungsi:** Mengidentifikasi cabang atau lokasi fisik (*site*).
+*   **Komponen:**
+    *   **Kode Situs:** Diawali huruf "S" diikuti 4 digit (misal: S0104).
+    *   **Alamat Fisik:** Lokasi operasional (misal: Jl. Hayam Wuruk No. 12).
+    *   **IP Address:** Di-*generate* secara internal oleh **Team Support** (Sistem tidak mengambil dari provider, melainkan acuan topologi perusahaan).
+
+### B. Detail Layanan & Project
+*   **Fungsi:** Merinci jenis perangkat/layanan jaringan yang diimplementasikan beserta sub-tautannya (*links*).
+*   **Komponen:**
+    *   **Paket Layanan (SDWAN):** Terdiri dari klasifikasi `BackOne - SDWAN Lite`, `SDWAN Pro`, `SDWAN Gateway`, dan `Tanpa SDWAN`. (Dalam *Edit Mode* dapat dipilih melalui *dropdown*).
+    *   **Project Number:** Dapat diisi manual (Teks Input), misal: `PRJ-2023-012`.
+    *   **Networks:** Nama grup entitas (misal: *Cleo Group*) ditarik secara otomatis (*Auto*).
+    *   **Detail Multi-Link:** Layanan bisa memiliki lebih dari satu link (misal *MAIN* dan *BACKUP*).
+        *   **Provider:** Telkom, Lintasarta, dsb. (Dipilih dari *dropdown* menu Service).
+        *   **Kapasitas:** 50 Mbps, 100 GB, dsb. (Dipilih dari *dropdown* menu Service).
+        *   **SID Langganan:** ID berlangganan dari Vendor (Diinput manual dengan teks).
+
+### C. Timeline
+*   **Fungsi:** Mencatat periode aktif (*uptime contract*) dari situs tersebut.
+*   **Komponen:**
+    *   **Start Online:** Tanggal instalasi/aktivasi.
+    *   **Stop Online:** Tanggal jatuh tempo atau prediksi kontrak berakhir.
+
+### D. Status BAA
+*   **Fungsi:** Memantau dokumen administrasi dari sisi Tim Sales.
+*   **Komponen:**
+    *   **Status Kategori:** Terdiri dari 4 opsi pasti (*New Link*, *Upgrade Link*, *Downgrade Link*, *Relokasi*).
+    *   **Upload BAA:** Tombol untuk mengunggah Berita Acara (Format PDF) khusus oleh **Tim Sales**.
+
+### E. PO Dokumen
+*   **Fungsi:** Melacak aliran pemesanan kerja (Purchase Order) internal dan eksternal.
+*   **Komponen:**
+    *   **PO dari User:** Dokumen *Purchase Order* masuk dari Klien/Customer.
+    *   **PO ke Vendor:** Dokumen *Purchase Order* keluar yang ditujukan ke ISP (Telkom/Lintasarta).
+
+### F. Invoice
+*   **Fungsi:** Mengatur berkas penagihan secara terisolasi khusus untuk hak akses **Tim Finance**.
+*   **Komponen:**
+    *   **No Invoice:** Nomor identitas surat tagihan resmi (misal: INV/2026/001).
+    *   **Upload Bukti Invoice:** Lampiran spesifik bukti pembayaran/penagihan resmi.
+
+### G. Dismantle
+*   **Fungsi:** Menyediakan ruang untuk prosedur pencabutan atau terminasi layanan.
+*   **Komponen:** Tersedia fungsi untuk menarik/mengunggah dokumen Berita Acara Penarikan (BAP) jika layanan pada situs dihentikan.
+
+### H. Keterangan (Notes)
+*   **Fungsi:** Kolom catatan bebas (*textarea*) bagi tim untuk meninggalkan pesan terkait gangguan, instruksi khusus, atau histori aktivitas.
+
+### I. Tombol Global (Header)
+*   **Download XLSX:** Mengunduh seluruh rincian laporan *Sites* ke format Excel.
+*   **Tambah Situs Baru:** Tombol pintu masuk bagi *Team Support* untuk mendaftarkan *site* yang bersifat manual, contohnya situs kategori *Non / Tanpa SD-WAN* yang datanya belum terhubung dengan API *controller*.
+
+---
+**Catatan Teknis:** 
+Rancangan antarmuka telah menggunakan basis *framework* **TailwindCSS** dengan skema *Grid/Flexbox* yang menyesuaikan kebiasaan pengguna desktop. Hak akses peran (Sales, Finance, Support) nantinya akan diterapkan pada tingkat *Backend/Database*, sementara *Front-End* hanya akan menyembunyikan/menampilkan kolom yang sesuai dengan profil pengguna (Login Session).

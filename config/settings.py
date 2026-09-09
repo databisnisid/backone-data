@@ -23,7 +23,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-x30rmug%(yy6rp%c!@d35h25oda6f2j7(gpv=-i0ifk0r1k2g!'
+SECRET_KEY = str(os.getenv('SECRET_KEY', 'django-insecure-x30rmug%(yy6rp%c!@d35h25oda6f2j7(gpv=-i0ifk0r1k2g!'))
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -65,6 +65,10 @@ INSTALLED_APPS = [
     'taggit',
     'axes',
     'django_cleanup.apps.CleanupConfig',
+    'rest_framework',
+    'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
+    'drf_spectacular',
 ]
 
 
@@ -224,3 +228,45 @@ CSRF_TRUSTED_ORIGINS = [WAGTAILADMIN_BASE_URL]
 
 # QUOTA TAG
 QUOTA_TYPE = ['dpi', 'starlink']
+
+
+# DRF
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 100,
+}
+
+# drf-spectacular (Swagger/OpenAPI)
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'BackOne Data API',
+    'DESCRIPTION': 'BackOne ISP site management API (sync-fed read-only + manual sites)',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'SERVE_PERMISSIONS': ['rest_framework.permissions.IsAuthenticated'],
+    'PREPROCESSING_HOOKS': ['config.settings.filter_wagtail_api_paths'],
+}
+
+
+def filter_wagtail_api_paths(endpoints, **kwargs):
+    """Drop Wagtail's internal /api/main/* auto-registered routes (error at schema-build) from OpenAPI schema."""
+    kept = [(path, path_regex, method, callback)
+            for path, path_regex, method, callback in endpoints
+            if not path.startswith('/api/main/')]
+    return kept
+
+
+# SIMPLE JWT
+from datetime import timedelta
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+}

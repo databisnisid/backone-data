@@ -1,0 +1,32 @@
+version: "3.8"
+
+services:
+  frontend:
+    image: git.proit.id/proitlab/backone-data-frontend:dev
+    environment:
+      # Django backend origin the BFF proxies to (server-side only, never exposed to browser)
+      - BACKONE_API_URL=http://backone-data:8008
+      - NODE_ENV=production
+      - PORT=3000
+    networks:
+      - traefik-public
+      - backend
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=traefik-public"
+        # HTTP entrypoint -> redirect handled by traefik static config
+        - "traefik.http.routers.backone-frontend.rule=Host(`data.yourdomain.id`)"
+        - "traefik.http.routers.backone-frontend.entrypoints=websecure"
+        - "traefik.http.routers.backone-frontend.tls.certresolver=letsencrypt"
+        - "traefik.http.services.backone-frontend.loadbalancer.server.port=3000"
+
+networks:
+  traefik-public:
+    external: true
+  backend:
+    driver: overlay
+    attachable: true
