@@ -130,6 +130,23 @@ class SitesViewSet(viewsets.ModelViewSet):
                 ],
             }
         )
+    @action(detail=False, methods=["get"], url_path="options")
+    def options(self, request):
+        """Return the lookup option lists (sdwan/baa/role names) for the FE selects (C25)."""
+        from .models import SdwanPackage, BaaStatus, LinkRole
+
+        return Response(
+            {
+                "sdwan_package": list(
+                    SdwanPackage.objects.order_by("name").values_list("name", flat=True)
+                ),
+                "baa_status_category": list(
+                    BaaStatus.objects.order_by("name").values_list("name", flat=True)
+                ),
+                "role": list(LinkRole.objects.order_by("name").values_list("name", flat=True)),
+            }
+        )
+
     @action(detail=False, methods=["get"], url_path="export.xlsx")
     def export(self, request):
         from django.utils import timezone as tz

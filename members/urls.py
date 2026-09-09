@@ -9,5 +9,6 @@ router.register("links", MemberLinkViewSet, basename="links")
 
 urlpatterns = [
     path("get_by_user/<int:user>/", get_members_by_user, name="get-members-by-user"),
+    path("options/", SitesViewSet.as_view({"get": "options"}), name="members-options"),
     path("", include(router.urls)),
 ]
