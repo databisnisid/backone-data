@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 
-import { Globe } from "lucide-react";
 
 import { LoginForm } from "../../_components/login-form";
 
@@ -10,7 +9,8 @@ export default function LoginV1() {
       <div className="hidden bg-primary lg:block lg:w-1/3">
         <div className="flex h-full flex-col items-center justify-center p-12 text-center">
           <div className="space-y-6">
-            <Globe className="mx-auto size-12 text-primary-foreground" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/backone-logo.svg" alt="BackOne" className="mx-auto size-16" />
             <div className="space-y-2">
               <h1 className="font-light text-5xl text-primary-foreground">BackOne Data</h1>
               <p className="text-primary-foreground/80 text-xl">Dashboard manajemen situs jaringan</p>

@@ -134,6 +134,7 @@ Unchanged: `0 * * * * python /app/manage.py shell --command "from config.workers
 | V26 | **Site table fits viewport** — `/sites` list renders without horizontal scroll on desktop; the Action ("Ubah") column is visible without scrolling. Columns compress/truncate cell content (never drop a column) so the last column stays on-screen |
 | V27 | **No global top-header search** — `(main)` shell header shows sidebar toggle + page title only; SearchDialog command palette (trigger button + ⌘J palette) not rendered in any `(main)` page. Per-page search (sites list "Pencarian sites...") unaffected |
 | V28 | **No sidebar Quick Create/Inbox row** — `(main)` app sidebar opens directly on the nav-groups block; the primary "Quick Create" button + adjacent Inbox button are not rendered in any sidebar state (expanded or icon-collapsed). Nav groups/routes unchanged |
+| V29 | **BackOne logo mark in brand slots** — the BackOne logo SVG (`public/backone-logo.svg`, served by the FE container) renders as the brand mark in the app sidebar header and the login page left panel (replacing the generic Globe icons) and as the browser-tab favicon (`metadata.icons`). Brand text beside the mark unchanged. Asset is FE-served (dedicated container), not imported from backend static |
 
 ## §T — Tasks
 
@@ -171,6 +172,7 @@ Unchanged: `0 * * * * python /app/manage.py shell --command "from config.workers
 | T28 | x | FE: `/sites` table — fit columns to viewport (compress/truncate per-cell, no `overflow-x-auto` horizontal scroll; keep all columns), Action/"Ubah" always visible at typical desktop width | C13,V26 |
 | T29 | x | FE: remove global header search — drop `<SearchDialog />` from `(main)/layout.tsx` header + import; delete obsolete `search-dialog.tsx` + `components/ui/command.tsx` (used only by it); header = sidebar toggle + page title | V27 |
 | T30 | x | FE: remove sidebar Quick Create + Inbox row — delete the `SidebarGroup` block (Quick Create primary button + Inbox button) from `nav-main.tsx`; drop now-unused `MailIcon`/`PlusCircleIcon` imports; sidebar opens directly at nav groups | V28 |
+| T31 | x | FE: copy `backone-logo.svg` to FE `public/` (done) + render as brand mark in sidebar header (`app-sidebar.tsx`) + login left panel (`(auth)/auth/v1/login/page.tsx`), replacing `Globe` icons; set `metadata.icons` to use it as favicon (root `layout.tsx`); keep brand text | V29 |
 
 ## §B — Bugs
 
