@@ -24,6 +24,15 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   user: NavUserInfo;
 };
 
+
+// T39/V41: drop the lookups nav entry unless the user is a superuser.
+function visibleItems(): typeof sidebarItems {
+  return sidebarItems.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => item.id !== "settings-lookups"),
+  }));
+}
+
 export function AppSidebar({ user, ...props }: AppSidebarProps) {
   const { sidebarVariant, sidebarCollapsible, isSynced } = usePreferencesStore(
     useShallow((s) => ({
@@ -35,6 +44,7 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
 
   const variant = isSynced ? sidebarVariant : props.variant;
   const collapsible = isSynced ? sidebarCollapsible : props.collapsible;
+  const items = user.isSuperuser ? sidebarItems : visibleItems();
 
   return (
     <Sidebar {...props} variant={variant} collapsible={collapsible}>
@@ -52,7 +62,7 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={sidebarItems} />
+        <NavMain items={items} />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={user} />
