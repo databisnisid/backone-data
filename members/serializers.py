@@ -1,13 +1,20 @@
 import os
 from rest_framework import serializers
-from .models import Members, MemberLink, SDWAN_PACKAGE_CHOICES, BAA_STATUS_CHOICES
+from .models import Members, MemberLink, Links, SDWAN_PACKAGE_CHOICES, BAA_STATUS_CHOICES
 from .rbac import writable_fields, readable_fields, CORE_EDIT_FIELDS
 
 
 class MemberLinkSerializer(serializers.ModelSerializer):
+    member = serializers.PrimaryKeyRelatedField(
+        queryset=Members.objects.all(), write_only=True, required=False
+    )
+    service = serializers.PrimaryKeyRelatedField(
+        queryset=Links.objects.all(), allow_null=True, required=False
+    )
+
     class Meta:
         model = MemberLink
-        fields = ("id", "role", "service", "provider", "capacity", "sid")
+        fields = ("id", "member", "role", "service", "provider", "capacity", "sid")
 
 
 class MemberSerializer(serializers.ModelSerializer):
