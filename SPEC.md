@@ -32,6 +32,10 @@ Rework BackOne Data into full decoupled app: Next.js frontend (React 19, App Rou
 | C21 | **Dismantle = derived view** of `Members.offline_at != null` — no new column/status, no migration, no drift (Q3/Q7) |
 | C22 | Dashboard aggregates ship **per `network_group`** (NetworksGroup): BAA = `upload_baa` non-null; Invoice = `invoice_number` non-null (Q7). Top Networks retained, dismantle count folds into Online/Offline cards |
 | C23 | **File upload cap 10MB / PDF,XLS,XLSX,DOC,DOCX** (existing `MAX_UPLOAD_SIZE`+`ALLOWED_UPLOAD_EXT`, already enforced in `MemberFileSerializer`) — reused, not re-added |
+| C24 | Lookup value sets (`sdwan_package`, `baa_status_category`, `MemberLink.role`) move from fixed Python choices to **DB-backed tables** — each a Wagtail snippet model mirroring `Links` (`name` CharField, delete-protect). No value removed while a site references it |
+| C25 | API stays **string in/out**: `SlugRelatedField(slug_field="name")` resolves the string→lookup row on write, returns the lookup `name` string on read. FE unchanged for the *values*; the *option lists* now come from an endpoint, not hard-coded arrays |
+| C26 | Seed rows (prod-distinct): SDWAN `{BackOne - SDWAN Lite, Pro, Gateway, Tanpa SDWAN}`; BAA `{New Link, Upgrade Link, Downgrade Link, Relokasi}`; role `{MAIN, BACKUP, SINGLE}`. Backfill maps existing string→row (prod has only `BackOne - SDWAN Pro`, `New Link`, `BACKUP`) |
+| C27 | Migration `members.0012`: `CharField`→FK on `Members.sdwan_package`/`baa_status_category` + `MemberLink.role`; new tables seeded + backfilled in a data migration. MySQL prod |
 ## §R — Research
 
 | ID | Ruling | Source |
@@ -54,6 +58,7 @@ Rework BackOne Data into full decoupled app: Next.js frontend (React 19, App Rou
 | Django | `/api/sites/<id>/` | DRF ViewSet | Detail / update manual-only |
 | Django | `/api/sites/<id>/files/` | DRF upload endpoint | BAA/PO/BAP/invoice file upload |
 | Django | `/api/sites/export.xlsx` | DRF export | Server-side XLSX |
+| Django | `/api/members/options/` | DRF ViewSet action | Lookup options for the three dropdowns (sdwan/baa/role), string list — feeds FE selects (C25) |
 | Django | `/api/quota/` | DRF ViewSet | Read-only Quota lists |
 | Django | `/api/networks/`, `/api/organizations/` | DRF ViewSets | Read-only lists for selects/menus |
 | Django | `/` (root) | Wagtail admin (`include(wagtailadmin_urls)`) | Live admin: login + homepage/map dashboard + snippet menus (C7) |
@@ -68,16 +73,15 @@ Rework BackOne Data into full decoupled app: Next.js frontend (React 19, App Rou
 Keep `networks`, `networks_group`, `links`, `organizations`, `auth_user`, Django groups as-is.
 
 ### New model fields (mockup cols A–I → existing `members` + new tables)
-
 | Mockup col | Field / model | RW scope (C8/C9/C10/C12) |
 |---|---|---|
 | A Situs & Address | `member_code`, `address` (exist); **`ip_address`** (new) | ip_address: manual-only |
-| B SDWAN pkg | **`sdwan_package`** CharField choices: `BackOne - SDWAN Lite|SDWAN Pro|SDWAN Gateway|Tanpa SDWAN` | editable manual |
+| B SDWAN pkg | **`sdwan_package`** FK→ SDWAN snippet (real table, C24); value returned as string (C25) | editable manual |
 | B Project no. | **`project_number`** | editable manual |
 | B Networks | `network` FK (auto) | read-only |
-| B multi-link | **new child `MemberLink`** (ParentalKey→Members via ClusterableModel): `label`(MAIN/BACKUP/SINGLE), `service_type` FK→Links?, `provider` CharField, `capacity` CharField, `sid` CharField | editable manual; links on synced read-only |
+| B multi-link | **new child `MemberLink`** (ParentalKey→Members via ClusterableModel): `role` FK→ role snippet (C24), `service` FK→Links, `provider` CharField, `capacity` CharField, `sid` CharField | editable manual; links on synced read-only |
 | C Timeline | `online_at`, `offline_at` (exist) | read-only on sync |
-| D Status BAA | **`baa_status_category`** choices: New Link\|Upgrade Link\|Downgrade Link\|Relokasi | editable manual; on synced only Support/…masked |
+| D Status BAA | **`baa_status_category`** FK→ BAA snippet (C24); string in/out (C25) | editable manual; on synced only Support/…masked |
 | D BAA file | `upload_baa` (exist) | upload: synced read-only, manual editable |
 | E PO | **`po_file_user`**, **`po_file_vendor`** FileFields (new) | upload manual/Finance |
 | F Invoice | `invoice_number` (exist); **`invoice_file`** FileField (new) | Finance |
@@ -131,13 +135,19 @@ Unchanged: `0 * * * * python /app/manage.py shell --command "from config.workers
 | V24 | **Nested MemberLink write path**: `member_links` is a writable nested serializer, not `read_only=True`; create/update/delete of links flows through DRF + `save_child_instances` on `Members.save()` — never a raw modelcluster bypass that skips a role/field check. Sales may write links on synced + manual; other roles link read-only |
 | V25 | **Dismantled-site visibility**: `offline_at <= now` (dismantled) sites remain READ + summarizable for role-filtered users (Sales/Finance/Purchasing) — allows PO/invoice fill on dismantled sites and correct per-group dismantle counts. Only the default "active sites" list filters them out; aggregates + detail must not double-filter (BLOCK-2 fix) |
 
+
+
 | V26 | **Site table fits viewport** — `/sites` list renders without horizontal scroll on desktop; the Action ("Ubah") column is visible without scrolling. Columns compress/truncate cell content (never drop a column) so the last column stays on-screen |
 | V27 | **No global top-header search** — `(main)` shell header shows sidebar toggle + page title only; SearchDialog command palette (trigger button + ⌘J palette) not rendered in any `(main)` page. Per-page search (sites list "Pencarian sites...") unaffected |
 | V28 | **No sidebar Quick Create/Inbox row** — `(main)` app sidebar opens directly on the nav-groups block; the primary "Quick Create" button + adjacent Inbox button are not rendered in any sidebar state (expanded or icon-collapsed). Nav groups/routes unchanged |
 | V29 | **BackOne logo mark in brand slots** — the BackOne logo SVG (`public/backone-logo.svg`, served by the FE container) renders as the brand mark in the app sidebar header and the login page left panel (replacing the generic Globe icons) and as the browser-tab favicon (`metadata.icons`). Brand text beside the mark unchanged. Asset is FE-served (dedicated container), not imported from backend static |
 | V30 | **Login left panel shows random photo** — desktop login left panel (`lg:w-1/3`, previously `bg-primary`) renders a random photo from `picsum.photos` as background instead of the flat black/primary color; BackOne logo + "BackOne Data" title stay overlaid and legible (translucent dark scrim behind the text). Mobile (`<lg`) panel stays hidden |
-
-## §T — Tasks
+| V31 | Lookup tables are the sole source of SDWAN/BAA/role options — no hard-coded choice arrays remain in backend models or FE `data.ts`. **FE dropdowns load options from `/api/members/options/`**, not a static list |
+| V32 | `sdwan_package`/`baa_status_category`/`role` resolve string→FK server-side on write (`SlugRelatedField(slug_field="name")`), emit the lookup `name` string on read (C25). A value not in the table is rejected (serializer `SlugRelatedField` validation), preserving V7's serializer-boundary enforcement |
+| V33 | Lookup tables delete-protect (`user_can_delete_obj=False`, like `Links`); deleting an in-use value is impossible (C24) |
+| V34 | Migration `members.0012` is data-safe: seed rows, backfill existing strings→rows (prod has `BackOne - SDWAN Pro`, `New Link`, `BACKUP` only), then `CharField`→FK. No data loss, no orphan FKs (C27) |
+| V35 | **Export + sites-list read emit the lookup name string** — `apis.py` XLSX export rows and the sites-list read-builder must emit `m.sdwan_package.name` / `m.baa_status_category.name` (or empty) — the cells/cards render the value, not `<SdwanPackage: ...>` (guards the `sites-view.tsx` Badge + export cell) |
+| V36 | **`MemberLink.__str__` emits the role name** — `models.py` `__str__` `"%s" % self.role` on an FK renders `<LinkRole: MAIN>`; the serializer read path + `__str__` must emit `self.role.name` (or empty) so Wagtail and link rows show `MAIN`/`BACKUP`/`SINGLE` |
 
 | ID | Status | Task | Cites |
 |---|---|---|---|
@@ -175,6 +185,11 @@ Unchanged: `0 * * * * python /app/manage.py shell --command "from config.workers
 | T30 | x | FE: remove sidebar Quick Create + Inbox row — delete the `SidebarGroup` block (Quick Create primary button + Inbox button) from `nav-main.tsx`; drop now-unused `MailIcon`/`PlusCircleIcon` imports; sidebar opens directly at nav groups | V28 |
 | T32 | x | FE: login left panel (desktop) — replace `bg-primary` with a random `picsum.photos` background image (random seed per load) + translucent scrim so logo/title stay legible; panel stays `hidden lg:block lg:w-1/3` | V30 |
 | T31 | x | FE: copy `backone-logo.svg` to FE `public/` (done) + render as brand mark in sidebar header (`app-sidebar.tsx`) + login left panel (`(auth)/auth/v1/login/page.tsx`), replacing `Globe` icons; set `metadata.icons` to use it as favicon (root `layout.tsx`); keep brand text | V29 |
+| T33 | x | Backend: new snippet models `SdwanPackage`, `BaaStatus`, `LinkRole` in `members/models.py` (mirror `Links`: `name` CharField, timestamps, `verbose_name`); register as Wagtail snippets with `user_can_delete_obj=False` in `members/wagtail_hooks.py` (links `LinksViewSet` template) | C24,V33 |
+| T34 | . | Backend: migration `members.0012` — create 3 tables, seed rows (C26), backfill existing `CharField` values→FK rows (prod has only `BackOne - SDWAN Pro`, `New Link`, `BACKUP`), then convert `Members.sdwan_package`/`baa_status_category` + `MemberLink.role` CharField→FK. Data-safe, no loss/orphan (C27,V34) | C26,C27,V34 |
+| T35 | . | Backend: serialize — `sdwan_package`/`baa_status_category`/`role` become `SlugRelatedField(slug_field="name")` (resolves the **string name** the FE sends → FK row on write; FK name via `to_representation` on read); drop `ChoiceField` + `SDWAN_PACKAGE_CHOICES`/`BAA_STATUS_CHOICES`/`LINK_ROLE_CHOICES`. Update the sites **list** (DRF serializer output) + **export** rows (`apis.py` export + the list read-builder in `apis.py`) to emit the lookup `name` string, not the FK instance. Also make `MemberLink.__str__` emit `self.role.name` | C25,V32,V35,V36 |
+| T36 | . | Backend: new `MemberOptionsViewSet` action (or `@action`) at `/api/members/options/` returning the three option lists from the tables (sdwan/baa/role as string arrays) — feeds FE selects | C25,V31 |
+| T37 | . | FE: drop hard-coded `SDWAN_CHOICES`/`BAA_STATUS_CHOICES` from `data.ts` + `["MAIN","BACKUP","SINGLE"]` from `site-edit-form.tsx` + `SDWAN_CHOICES` use in `create-site-dialog.tsx` (L21/L115); fetch the option lists from `/api/members/options/` and use them for the sdwan/baa/role selects | C25,V31 |
 
 ## §B — Bugs
 

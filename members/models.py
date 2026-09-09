@@ -351,3 +351,48 @@ class MemberLink(models.Model):
 
     def __str__(self):
         return "%s %s - %s" % (self.role, self.service or "", self.provider or "")
+
+
+class SdwanPackage(models.Model):
+    """Lookup: SDWAN package options (C24). Backs Members.sdwan_package FK."""
+
+    name = models.CharField(_("Name"), max_length=30)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("SDWAN Package")
+        verbose_name_plural = _("SDWAN Packages")
+
+    def __str__(self):
+        return "%s" % self.name
+
+
+class BaaStatus(models.Model):
+    """Lookup: BAA status category options (C24). Backs Members.baa_status_category FK."""
+
+    name = models.CharField(_("Name"), max_length=20)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("BAA Status")
+        verbose_name_plural = _("BAA Statuses")
+
+    def __str__(self):
+        return "%s" % self.name
+
+
+class LinkRole(models.Model):
+    """Lookup: member-link role options (C24). Backs MemberLink.role FK."""
+
+    name = models.CharField(_("Name"), max_length=10)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("Link Role")
+        verbose_name_plural = _("Link Roles")
+
+    def __str__(self):
+        return "%s" % self.name

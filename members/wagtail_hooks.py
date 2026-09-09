@@ -14,7 +14,7 @@ from django.utils import timezone
 from wagtailgeowidget import geocoders
 from wagtailgeowidget.panels import GeoAddressPanel, GoogleMapsPanel
 from django.contrib.auth.models import Group
-from .models import Members
+from .models import Members, SdwanPackage, BaaStatus, LinkRole
 
 
 class MembersViewSet(SnippetViewSet):
@@ -152,3 +152,53 @@ class MembersViewSet(SnippetViewSet):
 
 
 register_snippet(MembersViewSet)
+
+
+class SdwanPackageViewSet(SnippetViewSet):
+    model = SdwanPackage
+    menu_label = "SDWAN Packages"
+    menu_icon = "tag"
+    add_to_admin_menu = True
+    menu_order = 301
+    list_display = ("name",)
+    search_fields = ("name",)
+    list_per_page = 100
+    panels = [FieldPanel("name")]
+
+    def user_can_delete_obj(self, request, obj):
+        return False
+
+
+class BaaStatusViewSet(SnippetViewSet):
+    model = BaaStatus
+    menu_label = "BAA Statuses"
+    menu_icon = "tag"
+    add_to_admin_menu = True
+    menu_order = 302
+    list_display = ("name",)
+    search_fields = ("name",)
+    list_per_page = 100
+    panels = [FieldPanel("name")]
+
+    def user_can_delete_obj(self, request, obj):
+        return False
+
+
+class LinkRoleViewSet(SnippetViewSet):
+    model = LinkRole
+    menu_label = "Link Roles"
+    menu_icon = "tag"
+    add_to_admin_menu = True
+    menu_order = 303
+    list_display = ("name",)
+    search_fields = ("name",)
+    list_per_page = 100
+    panels = [FieldPanel("name")]
+
+    def user_can_delete_obj(self, request, obj):
+        return False
+
+
+register_snippet(SdwanPackageViewSet)
+register_snippet(BaaStatusViewSet)
+register_snippet(LinkRoleViewSet)
