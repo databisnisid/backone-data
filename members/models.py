@@ -30,6 +30,51 @@ LINK_ROLE_CHOICES = [
 
 
 # class Members(models.Model):
+class SdwanPackage(models.Model):
+    """Lookup: SDWAN package options (C24). Backs Members.sdwan_package FK."""
+
+    name = models.CharField(_("Name"), max_length=30)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("SDWAN Package")
+        verbose_name_plural = _("SDWAN Packages")
+
+    def __str__(self):
+        return "%s" % self.name
+
+
+class BaaStatus(models.Model):
+    """Lookup: BAA status category options (C24). Backs Members.baa_status_category FK."""
+
+    name = models.CharField(_("Name"), max_length=20)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("BAA Status")
+        verbose_name_plural = _("BAA Statuses")
+
+    def __str__(self):
+        return "%s" % self.name
+
+
+class LinkRole(models.Model):
+    """Lookup: member-link role options (C24). Backs MemberLink.role FK."""
+
+    name = models.CharField(_("Name"), max_length=10)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("Link Role")
+        verbose_name_plural = _("Link Roles")
+
+    def __str__(self):
+        return "%s" % self.name
+
+
 class Members(ClusterableModel):
     name = models.CharField(_("Member Name"), max_length=50)
     member_code = models.CharField(
@@ -73,14 +118,24 @@ class Members(ClusterableModel):
     # Mockup Sites Dashboard — user-owned data (V4,V5,V6)
     is_manual = models.BooleanField(_("Manual Site"), default=False)
     ip_address = models.CharField(_("IP Address"), max_length=50, blank=True, null=True)
-    sdwan_package = models.CharField(
-        _("SDWAN Package"), max_length=30, choices=SDWAN_PACKAGE_CHOICES, blank=True, null=True
+    sdwan_package = models.ForeignKey(
+        SdwanPackage,
+        on_delete=models.PROTECT,
+        related_name="members",
+        verbose_name=_("SDWAN Package"),
+        blank=True,
+        null=True,
     )
     project_number = models.CharField(
         _("Project Number"), max_length=50, blank=True, null=True
     )
-    baa_status_category = models.CharField(
-        _("BAA Status Category"), max_length=20, choices=BAA_STATUS_CHOICES, blank=True, null=True
+    baa_status_category = models.ForeignKey(
+        BaaStatus,
+        on_delete=models.PROTECT,
+        related_name="members",
+        verbose_name=_("BAA Status Category"),
+        blank=True,
+        null=True,
     )
     po_file_user = models.FileField(
         _("PO from User"), upload_to="po/", blank=True, null=True
@@ -332,7 +387,14 @@ class MemberLink(models.Model):
     """Multi-link detail for a site (mockup col B): MAIN/BACKUP/SINGLE with provider, capacity, SID."""
 
     member = ParentalKey(Members, related_name="member_links", on_delete=models.CASCADE)
-    role = models.CharField(_("Link Role"), max_length=10, choices=LINK_ROLE_CHOICES, default="MAIN")
+    role = models.ForeignKey(
+        LinkRole,
+        on_delete=models.PROTECT,
+        related_name="member_links",
+        verbose_name=_("Link Role"),
+        blank=True,
+        null=True,
+    )
     service = models.ForeignKey(
         Links,
         on_delete=models.SET_NULL,
@@ -353,46 +415,4 @@ class MemberLink(models.Model):
         return "%s %s - %s" % (self.role, self.service or "", self.provider or "")
 
 
-class SdwanPackage(models.Model):
-    """Lookup: SDWAN package options (C24). Backs Members.sdwan_package FK."""
 
-    name = models.CharField(_("Name"), max_length=30)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        verbose_name = _("SDWAN Package")
-        verbose_name_plural = _("SDWAN Packages")
-
-    def __str__(self):
-        return "%s" % self.name
-
-
-class BaaStatus(models.Model):
-    """Lookup: BAA status category options (C24). Backs Members.baa_status_category FK."""
-
-    name = models.CharField(_("Name"), max_length=20)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        verbose_name = _("BAA Status")
-        verbose_name_plural = _("BAA Statuses")
-
-    def __str__(self):
-        return "%s" % self.name
-
-
-class LinkRole(models.Model):
-    """Lookup: member-link role options (C24). Backs MemberLink.role FK."""
-
-    name = models.CharField(_("Name"), max_length=10)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        verbose_name = _("Link Role")
-        verbose_name_plural = _("Link Roles")
-
-    def __str__(self):
-        return "%s" % self.name
