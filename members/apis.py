@@ -1,3 +1,4 @@
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
@@ -20,18 +21,29 @@ def _is_authorized_all(user):
 
 
 def member_queryset_for(user):
+    """Full role-set queryset (active + dismantled) — aggregates/detail never double-filter (V25)."""
     if _is_authorized_all(user):
         qs = Members.objects.all()
     elif user.organization is None:
         return Members.objects.none()
     else:
         networks = user.organization.networks.all()
-        qs = Members.objects.filter(
-            network__in=networks, offline_at__isnull=True
-        ) | Members.objects.filter(
-            network__in=networks, offline_at__gt=timezone.now()
-        )
+        qs = Members.objects.filter(network__in=networks)
     return qs.order_by("id")
+
+
+def active_members_queryset(qs):
+    now = timezone.now()
+    return qs.filter(Q(offline_at__isnull=True) | Q(offline_at__gt=now))
+
+
+def apply_status_filter(qs, status):
+    """?status=active (default) | all | dismantle on the sites list — V25."""
+    if status == "dismantle":
+        return qs.filter(offline_at__isnull=False, offline_at__lte=timezone.now())
+    if status == "active":
+        return active_members_queryset(qs)
+    return qs  # "all" or unknown → full role set
 
 
 class SitesViewSet(viewsets.ModelViewSet):
@@ -43,7 +55,10 @@ class SitesViewSet(viewsets.ModelViewSet):
     ordering_fields = ("id", "name", "member_id", "online_at", "offline_at")
 
     def get_queryset(self):
-        return member_queryset_for(self.request.user)
+        qs = member_queryset_for(self.request.user)
+        if self.action == "list":
+            qs = apply_status_filter(qs, self.request.query_params.get("status", "active"))
+        return qs
 
     def create(self, request, *args, **kwargs):
         if not _is_authorized_all(request.user):
@@ -118,7 +133,9 @@ class SitesViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], url_path="export.xlsx")
     def export(self, request):
         from django.utils import timezone as tz
-        qs = self.get_queryset()
+        qs = apply_status_filter(
+            self.get_queryset(), self.request.query_params.get("status", "active")
+        )
         user = request.user
         allowed = readable_fields(user)
         scalar_cols = [

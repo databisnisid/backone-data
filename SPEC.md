@@ -162,7 +162,7 @@ Unchanged: `0 * * * * python /app/manage.py shell --command "from config.workers
 
 | T25 | . | FE: file upload UI for feature files on synced sites (PO user / PO vendor / invoice) → BFF multipart → Django upload; size/ext errors surface (10MB, PDF/XLS/XLSX/DOC/DOCX) | C23,T13 |
 | T26 | . | FE: dashboard — group cards for BAA per group + Invoice per group (network_group), dismantle count folded into Online/Offline; keep Top Networks | C22,V22
-| T27 | . | Backend: fix role queryset (`member_queryset_for`) so dismantled (`offline_at<=now`) sites stay READ+summarizable for Sales/Finance/Purchasing — separate active-sites filter from aggregate/detail visibility; per-group dismantle count over full role set, not the active queryset; add dismantle filter param to sites list | C22,V22,V25 |
+| T27 | ✅ | Backend: fix role queryset (`member_queryset_for`) so dismantled (`offline_at<=now`) sites stay READ+summarizable Sales/Finance/Purchasing — separate active-sites filter aggregate/detail visibility; per-group dismantle count over full role set, not active queryset; add dismantle filter param sites list | C22,V22,V25 |
 
 ## §B — Bugs
 
