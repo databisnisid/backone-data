@@ -295,3 +295,40 @@ class LookupApiTest(TestCase):
         self.client.force_authenticate(user=self.superuser)
         r = self.client.delete(self._url("sdwan", self.sdwan.pk))
         self.assertIn(r.status_code, (404, 405))  # V39/V44 no destroy
+
+
+class MemberCodeSalesRbacTest(TestCase):
+    """T42/T43: member_code (Kode Situs) is Sales-writable on synced, denied for other roles. Cites V5,V20."""
+
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        from rest_framework.test import APIClient
+
+        self.client = APIClient()
+        org = Organizations.objects.create(name="Org")
+        net = Networks.objects.create(name="Net", network_id="NET1")
+        org.networks.add(net)
+        self.sales = User.objects.create_user(username="sales1", password="pass1234", organization=org)
+        self.sales.groups.add(Group.objects.get_or_create(name="Sales")[0])
+        self.finance = User.objects.create_user(username="fin1", password="pass1234", organization=org)
+        self.finance.groups.add(Group.objects.get_or_create(name="Finance")[0])
+        self.site = Members.objects.create(name="Synced Site", member_id="S1", is_manual=False, network=net)
+
+    def test_sales_can_write_member_code_on_synced(self):
+        # V5/V20: member_code is a feature field (in WRITE_BY_ROLE["Sales"]),
+        # so the is_manual=False core gate must NOT reject it.
+        self.client.force_authenticate(user=self.sales)
+        r = self.client.patch(
+            f"/api/members/sites/{self.site.pk}/", {"member_code": "SLS-001"}, format="json"
+        )
+        self.assertEqual(r.status_code, 200)
+        self.site.refresh_from_db()
+        self.assertEqual(self.site.member_code, "SLS-001")
+
+    def test_finance_cannot_write_member_code_on_synced(self):
+        # member_code NOT in Finance's writable set → role-level denial (V5).
+        self.client.force_authenticate(user=self.finance)
+        r = self.client.patch(
+            f"/api/members/sites/{self.site.pk}/", {"member_code": "FIN-001"}, format="json"
+        )
+        self.assertEqual(r.status_code, 400)

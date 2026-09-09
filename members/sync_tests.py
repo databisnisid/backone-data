@@ -50,6 +50,27 @@ class GetMembersByNetTest(TestCase):
         self.assertEqual(m.name, 'New')
 
     @patch('members.utils.requests.get')
+    def test_sync_does_not_overwrite_sales_member_code(self, mock_get):
+        # V6: member_code is Sales-owned — sync must never clobber it.
+        Members.objects.create(
+            name="Site", member_id="M1", member_code="SALES-CODE", network=self.network
+        )
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = [{
+            "name": "Site", "member_code": "UPSTREAM-CODE", "description": "d",
+            "member_id": "M1", "address": "addr", "location": "loc",
+            "online_at": "2024-01-01", "offline_at": None,
+            "mobile_number_first": "08123", "quota_first": "10GB/50GB/30/dpi",
+        }]
+        mock_get.return_value = mock_resp
+
+        get_members_by_net('http://api.test', 'NET1')
+
+        m = Members.objects.get(member_id='M1')
+        self.assertEqual(m.member_code, 'SALES-CODE')
+
+    @patch('members.utils.requests.get')
     def test_members_never_deleted(self, mock_get):
         Members.objects.create(
             name="Existing", member_id="M1", network=self.network

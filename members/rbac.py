@@ -11,13 +11,13 @@ FEATURE_FIELDS = (
     "project_number",
     "baa_status_category",
     "notes",
+    "member_code",
 )
 
 # Fields a role may WRITE on a manual site. Synced sites: nobody writes (V5).
 # CORE_EDIT fields (rename/address/network/timeline) only for ops roles.
 CORE_EDIT_FIELDS = (
     "name",
-    "member_code",
     "member_id",
     "address",
     "location",
@@ -31,13 +31,12 @@ CORE_EDIT_FIELDS = (
 WRITE_BY_ROLE = {
     "Superuser": set(CORE_EDIT_FIELDS + FEATURE_FIELDS) | {"member_links"},
     "Support": set(CORE_EDIT_FIELDS + FEATURE_FIELDS),
-    "Sales": {"baa_status_category", "upload_baa", "notes", "member_links"},
+    "Sales": {"baa_status_category", "upload_baa", "notes", "member_links", "member_code"},
     "Purchasing": {"po_file_vendor"},
     "Finance": {"invoice_number", "invoice_file", "notes"},
     "External": set(),
     "External Network": set(),
 }
-
 # Fields a role may READ on top of the always-readable core grid fields.
 READ_EXTRA_BY_ROLE = {
     "Superuser": set(FEATURE_FIELDS),

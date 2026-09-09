@@ -25,7 +25,6 @@ def get_members_by_net(domain_api, network_id):
 
         for resp_json in response_json:
             member_name = resp_json["name"]
-            member_code = resp_json["member_code"]
             member_description = resp_json["description"]
             member_id = resp_json["member_id"]
             member_address = resp_json["address"]
@@ -44,7 +43,6 @@ def get_members_by_net(domain_api, network_id):
                 member.member_id = member_id
 
             member.name = member_name
-            member.member_code = member_code
             member.description = member_description
             member.address = member_address
             member.location = member_location

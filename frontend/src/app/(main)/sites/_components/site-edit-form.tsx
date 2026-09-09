@@ -46,6 +46,7 @@ function scalarDefsFor(me: Me, options: MemberOptions): ScalarDef[] {
   }
   if (isSales(me)) {
     return [
+      { name: "member_code", label: "Kode Situs", kind: "text" },
       { name: "baa_status_category", label: "Status BAA", kind: "select", choices: options.baa_status_category },
       { name: "notes", label: "Keterangan", kind: "textarea" },
     ];
