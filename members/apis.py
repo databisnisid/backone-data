@@ -83,6 +83,17 @@ class SitesViewSet(viewsets.ModelViewSet):
             .annotate(count=Count("id"))
             .order_by("-count")[:10]
         )
+        groups = (
+            qs.exclude(network__network_group__isnull=True)
+            .values("network__network_group__name")
+            .annotate(
+                total=Count("id"),
+                baa=Count("id", filter=~Q(upload_baa="")),
+                invoice=Count("id", filter=~Q(invoice_number__isnull=True) & ~Q(invoice_number="")),
+                dismantle=Count("id", filter=~Q(offline_at__isnull=True)),
+            )
+            .order_by("network__network_group__name")
+        )
         return Response(
             {
                 "total_sites": total,
@@ -91,6 +102,16 @@ class SitesViewSet(viewsets.ModelViewSet):
                 "manual_sites": manual,
                 "top_networks": [
                     {"name": n["network__name"], "sites": n["count"]} for n in nets
+                ],
+                "group_aggregates": [
+                    {
+                        "network_group": g["network__network_group__name"],
+                        "total_sites": g["total"],
+                        "baa_sites": g["baa"],
+                        "invoice_sites": g["invoice"],
+                        "dismantle_sites": g["dismantle"],
+                    }
+                    for g in groups
                 ],
             }
         )
