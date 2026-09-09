@@ -193,7 +193,6 @@ export function SitesView() {
 
   const applyEdit = React.useCallback((updated: SiteRow) => {
     setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
-    setEditingId(null);
   }, []);
 
   const saveScalars = React.useCallback(
@@ -201,6 +200,7 @@ export function SitesView() {
       try {
         const updated = await patchSite(id, payload);
         applyEdit(updated);
+        setEditingId(null);
         toast.success("Saved");
       } catch (e) {
         toast.error((e as Error).message);
