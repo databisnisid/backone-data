@@ -40,6 +40,7 @@ WRITE_BY_ROLE = {
 
 # Fields a role may READ on top of the always-readable core grid fields.
 READ_EXTRA_BY_ROLE = {
+    "Superuser": set(FEATURE_FIELDS),
     "Sales": {"baa_status_category", "upload_baa", "notes", "member_links"},
     "Purchasing": {"po_file_vendor"},
     "Finance": {"invoice_number", "invoice_file", "po_file_user", "po_file_vendor", "notes"},
