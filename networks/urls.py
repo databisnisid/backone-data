@@ -1,17 +1,12 @@
-from django.urls import path
-from rest_framework.generics import ListAPIView
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 from .apis import NetworksViewSet, NetworksGroupViewSet
 
-list_nets = ListAPIView.as_view(
-    queryset=NetworksViewSet.queryset, serializer_class=NetworksViewSet.serializer_class,
-    permission_classes=NetworksViewSet.permission_classes,
-)
-list_groups = ListAPIView.as_view(
-    queryset=NetworksGroupViewSet.queryset, serializer_class=NetworksGroupViewSet.serializer_class,
-    permission_classes=NetworksGroupViewSet.permission_classes,
-)
+router = DefaultRouter()
+router.register("groups", NetworksGroupViewSet, basename="network-groups")
 
 urlpatterns = [
-    path("", list_nets, name="networks-list"),
-    path("groups/", list_groups, name="network-groups-list"),
+    path("", NetworksViewSet.as_view({"get": "list"}), name="networks-list"),
+    path("<int:pk>/", NetworksViewSet.as_view({"get": "retrieve", "patch": "partial_update"}), name="networks-detail"),
+    path("", include(router.urls)),
 ]
