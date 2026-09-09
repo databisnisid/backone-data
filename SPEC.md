@@ -131,6 +131,8 @@ Unchanged: `0 * * * * python /app/manage.py shell --command "from config.workers
 | V24 | **Nested MemberLink write path**: `member_links` is a writable nested serializer, not `read_only=True`; create/update/delete of links flows through DRF + `save_child_instances` on `Members.save()` — never a raw modelcluster bypass that skips a role/field check. Sales may write links on synced + manual; other roles link read-only |
 | V25 | **Dismantled-site visibility**: `offline_at <= now` (dismantled) sites remain READ + summarizable for role-filtered users (Sales/Finance/Purchasing) — allows PO/invoice fill on dismantled sites and correct per-group dismantle counts. Only the default "active sites" list filters them out; aggregates + detail must not double-filter (BLOCK-2 fix) |
 
+| V26 | **Site table fits viewport** — `/sites` list renders without horizontal scroll on desktop; the Action ("Ubah") column is visible without scrolling. Columns compress/truncate cell content (never drop a column) so the last column stays on-screen |
+
 ## §T — Tasks
 
 | ID | Status | Task | Cites |
@@ -163,6 +165,8 @@ Unchanged: `0 * * * * python /app/manage.py shell --command "from config.workers
 | T25 | ✅ | FE: file upload UI for feature files on synced sites (PO user / PO vendor / invoice) → BFF multipart → Django upload; size/ext errors surface (10MB, PDF/XLS/XLSX/DOC/DOCX) | C23,T13,V20 |
 | T26 | ✅ | FE: dashboard — group cards for BAA per group + Invoice per group (network_group), dismantle count folded into Online/Offline; keep Top Networks | C22,V22 |
 | T27 | ✅ | Backend: fix role queryset (`member_queryset_for`) so dismantled (`offline_at<=now`) sites stay READ+summarizable Sales/Finance/Purchasing — separate active-sites filter aggregate/detail visibility; per-group dismantle count over full role set, not active queryset; add dismantle filter param sites list | C22,V22,V25 |
+
+| T28 | x | FE: `/sites` table — fit columns to viewport (compress/truncate per-cell, no `overflow-x-auto` horizontal scroll; keep all columns), Action/"Ubah" always visible at typical desktop width | C13,V26 |
 
 ## §B — Bugs
 

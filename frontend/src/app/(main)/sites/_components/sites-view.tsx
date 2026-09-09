@@ -229,8 +229,18 @@ export function SitesView() {
   } else {
     body = (
       <>
-        <div className="overflow-x-auto">
-          <Table>
+        <Table className="table-fixed [&_td]:whitespace-normal [&_th]:whitespace-normal">
+          <colgroup>
+            <col className="w-[24%]" />
+            <col className="w-[20%]" />
+            <col />
+            <col />
+            <col />
+            <col />
+            <col />
+            <col />
+            <col className="w-[10%]" />
+          </colgroup>
             <TableHeader>
               <TableRow>
                 {headerList.map((h) => (
@@ -260,8 +270,7 @@ export function SitesView() {
                 ),
               )}
             </TableBody>
-          </Table>
-        </div>
+        </Table>
         <div className="flex items-center justify-between">
           <Pagination>
             <PaginationContent>
