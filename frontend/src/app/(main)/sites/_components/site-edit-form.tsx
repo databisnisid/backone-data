@@ -111,15 +111,21 @@ export function SiteEditForm({
 }) {
   const scalarDefs = scalarDefsFor(me);
   const fileFields = fileFieldsFor(me);
+  // Synced (upstream) sites: core fields are read-only server-side (serializers.py).
+  // Show them but disabled so the user sees the value without hitting the 400.
+  const isSynced = !row.is_manual;
+  const CORE_FIELD_NAMES = new Set(["name", "member_code", "address"]);
+  const coreReadOnly = (name: string) => isSynced && CORE_FIELD_NAMES.has(name);
   const [draft, setDraft] = React.useState<Record<string, string>>(() =>
     Object.fromEntries(
       scalarDefs.map((d) => [d.name, (row as unknown as Record<string, string | null>)[d.name] ?? ""]),
     ),
   );
-
   const dirty = scalarDefs
+    .filter((d) => !coreReadOnly(d.name))
     .filter((d) => (draft[d.name] ?? "") !== ((row as unknown as Record<string, string | null>)[d.name] ?? ""))
     .map((d) => d.name);
+
 
   const submit = () => {
     if (!dirty.length) {
@@ -208,6 +214,7 @@ export function SiteEditForm({
       <FieldGroup className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {scalarDefs.map((def) => {
           const isDirty = dirty.includes(def.name);
+          const readOnly = coreReadOnly(def.name);
           let control: React.ReactNode;
           if (def.kind === "select") {
             control = (
@@ -215,6 +222,7 @@ export function SiteEditForm({
                 <FieldLabel htmlFor={`edit-${def.name}`}>{def.label}</FieldLabel>
                 <Select
                   value={draft[def.name] || undefined}
+                  disabled={readOnly}
                   onValueChange={(v) => setDraft((d) => ({ ...d, [def.name]: v }))}
                 >
                   <SelectTrigger id={`edit-${def.name}`} className="w-full">
@@ -237,6 +245,7 @@ export function SiteEditForm({
                 <Textarea
                   id={`edit-${def.name}`}
                   value={draft[def.name]}
+                  disabled={readOnly}
                   onChange={(e) => setDraft((d) => ({ ...d, [def.name]: e.target.value }))}
                 />
               </div>
@@ -248,13 +257,23 @@ export function SiteEditForm({
                 <Input
                   id={`edit-${def.name}`}
                   value={draft[def.name]}
+                  disabled={readOnly}
                   onChange={(e) => setDraft((d) => ({ ...d, [def.name]: e.target.value }))}
                 />
               </Field>
             );
           }
           return (
-            <div key={def.name} className={isDirty ? "rounded-md ring-2 ring-primary/40" : ""}>
+            <div
+              key={def.name}
+              className={
+                readOnly
+                  ? "rounded-md bg-muted/30"
+                  : isDirty
+                    ? "rounded-md ring-2 ring-primary/40"
+                    : ""
+              }
+            >
               {control}
             </div>
           );
