@@ -11,6 +11,61 @@ from openpyxl import Workbook
 from .models import Members, MemberLink
 from .serializers import MemberSerializer, MemberFileSerializer, MemberLinkSerializer
 from .rbac import readable_fields, writable_fields
+from rest_framework.permissions import BasePermission
+from .models import Members, MemberLink, SdwanPackage, BaaStatus, LinkRole
+
+
+class IsSuperUser(BasePermission):
+    """Superuser-only gate (C28,V37,V43). NOT IsAdminUser — that checks
+    is_staff, so a staff-but-not-superuser Wagtail admin would gain access."""
+
+    message = "Superuser only."
+
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_superuser)
+
+
+def _make_lookup_serializer(model):
+    class _LookupSerializer(serializers.ModelSerializer):
+        class Meta:
+            fields = ("id", "name")
+
+    _LookupSerializer.Meta.model = model  # bind via Meta attr (closure NameError)
+    _LookupSerializer.__name__ = f"{model.__name__}Serializer"
+    return _LookupSerializer
+
+
+class _LookupViewSetBase(
+    viewsets.GenericViewSet,
+    viewsets.mixins.ListModelMixin,
+    viewsets.mixins.CreateModelMixin,
+    viewsets.mixins.UpdateModelMixin,
+):
+    """Shared lookup CRUD (T38). No DestroyModelMixin + http_method_names
+    excludes delete → no DELETE route exists (V39,V44). Custom IsSuperUser
+    permission gates every method (V37,V43)."""
+
+    permission_classes = [IsAuthenticated, IsSuperUser]
+    lookup_field = "id"
+    # V44: structurally no delete (no DestroyModelMixin; http_method_names
+    # omits "delete" so the router can't mount a delete route either).
+    http_method_names = ["get", "post", "put", "patch", "head", "options"]
+
+
+class SdwanLookupViewSet(_LookupViewSetBase):
+    queryset = SdwanPackage.objects.all()
+    serializer_class = _make_lookup_serializer(SdwanPackage)
+
+
+class BaaLookupViewSet(_LookupViewSetBase):
+    queryset = BaaStatus.objects.all()
+    serializer_class = _make_lookup_serializer(BaaStatus)
+
+
+class RoleLookupViewSet(_LookupViewSetBase):
+    queryset = LinkRole.objects.all()
+    serializer_class = _make_lookup_serializer(LinkRole)
+
 
 
 def _is_authorized_all(user):

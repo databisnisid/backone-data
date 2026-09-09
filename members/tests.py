@@ -226,3 +226,72 @@ class OrgFilteringTest(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(len(data), 1)
+
+
+class LookupApiTest(TestCase):
+    """T38/T41: superuser-only lookup CRUD. Cites V37,V38,V39,V43,V44."""
+
+    def setUp(self):
+        from rest_framework.test import APIClient
+        from .models import SdwanPackage, BaaStatus, LinkRole
+
+        self.client = APIClient()
+        self.superuser = User.objects.create_superuser(
+            username="admin", password="pass1234"
+        )
+        self.staff = User.objects.create_user(
+            username="staff", password="pass1234", is_staff=True
+        )
+        self.plain = User.objects.create_user(
+            username="plain", password="pass1234"
+        )
+        # name-unique (V38); migration 0012 seeds rows via get_or_create,
+        # so use get_or_create here to avoid UNIQUE collision ("Lite"/"New Link"/"MAIN").
+        self.sdwan, _ = SdwanPackage.objects.get_or_create(name="Lite")
+        self.baa, _ = BaaStatus.objects.get_or_create(name="New Link")
+        self.role, _ = LinkRole.objects.get_or_create(name="MAIN")
+
+
+    @staticmethod
+    def _url(kind, pk=None):
+        base = f"/api/members/lookups/{kind}/"
+        return base if pk is None else f"{base}{pk}/"
+
+    def test_superuser_can_list_all_kinds(self):
+        self.client.force_authenticate(user=self.superuser)
+        for kind in ("sdwan", "baa", "role"):
+            r = self.client.get(self._url(kind))
+            self.assertEqual(r.status_code, 200)
+            # DRF PageNumberPagination default → {count, results:[...]}
+            row = r.data["results"][0]
+            self.assertIn("id", row)
+            self.assertIn("name", row)
+    def test_superuser_can_create_and_rename(self):
+        self.client.force_authenticate(user=self.superuser)
+        r = self.client.post(self._url("sdwan"), {"name": "Pro"}, format="json")
+        self.assertEqual(r.status_code, 201)
+        pk = r.data["id"]
+        r = self.client.patch(self._url("sdwan", pk), {"name": "Pro Max"}, format="json")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.data["name"], "Pro Max")
+
+    def test_non_superuser_denied(self):
+        # staff-not-superuser must NOT pass (V43: IsAdminUser would leak)
+        for user in (self.staff, self.plain):
+            self.client.force_authenticate(user=user)
+            r = self.client.get(self._url("sdwan"))
+            self.assertEqual(r.status_code, 403)
+
+    def test_unaauthenticated_denied(self):
+        r = self.client.get(self._url("sdwan"))
+        self.assertEqual(r.status_code, 401)
+
+    def test_duplicate_name_rejected(self):
+        self.client.force_authenticate(user=self.superuser)
+        r = self.client.post(self._url("sdwan"), {"name": "Lite"}, format="json")
+        self.assertEqual(r.status_code, 400)  # V38 unique
+
+    def test_no_delete_route(self):
+        self.client.force_authenticate(user=self.superuser)
+        r = self.client.delete(self._url("sdwan", self.sdwan.pk))
+        self.assertIn(r.status_code, (404, 405))  # V39/V44 no destroy

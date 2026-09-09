@@ -1,11 +1,23 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import get_members_by_user
-from .apis import SitesViewSet, MemberLinkViewSet
+from .apis import (
+    SitesViewSet,
+    MemberLinkViewSet,
+    SdwanLookupViewSet,
+    BaaLookupViewSet,
+    RoleLookupViewSet,
+)
+
 
 router = DefaultRouter()
 router.register("sites", SitesViewSet, basename="sites")
 router.register("links", MemberLinkViewSet, basename="links")
+# Fixed per-kind paths (review NOTE: DefaultRouter can't param `{kind}`).
+router.register("lookups/sdwan", SdwanLookupViewSet, basename="lookups-sdwan")
+router.register("lookups/baa", BaaLookupViewSet, basename="lookups-baa")
+router.register("lookups/role", RoleLookupViewSet, basename="lookups-role")
+
 
 urlpatterns = [
     path("get_by_user/<int:user>/", get_members_by_user, name="get-members-by-user"),

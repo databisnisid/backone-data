@@ -13,7 +13,7 @@ from links.models import Links
 class SdwanPackage(models.Model):
     """Lookup: SDWAN package options (C24). Backs Members.sdwan_package FK."""
 
-    name = models.CharField(_("Name"), max_length=30)
+    name = models.CharField(_("Name"), max_length=30, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -28,7 +28,7 @@ class SdwanPackage(models.Model):
 class BaaStatus(models.Model):
     """Lookup: BAA status category options (C24). Backs Members.baa_status_category FK."""
 
-    name = models.CharField(_("Name"), max_length=20)
+    name = models.CharField(_("Name"), max_length=20, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -43,7 +43,7 @@ class BaaStatus(models.Model):
 class LinkRole(models.Model):
     """Lookup: member-link role options (C24). Backs MemberLink.role FK."""
 
-    name = models.CharField(_("Name"), max_length=10)
+    name = models.CharField(_("Name"), max_length=10, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
