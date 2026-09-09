@@ -1,10 +1,13 @@
+from django.db.models import Q
+
 from rest_framework import serializers, viewsets
 from rest_framework.permissions import BasePermission, IsAuthenticated, SAFE_METHODS
+from members.models import Members
 from .models import Networks, NetworksGroup
 
 
 class IsSuperUser(BasePermission):
-    """Superuser-only write gate (V33). NOT IsAdminUser — that checks is_staff,
+    """Superuser-only write gate (V33,V34). NOT IsAdminUser — that checks is_staff,
     so a staff-but-not-superuser Wagtail admin would gain write access."""
 
     message = "Superuser only."
@@ -20,17 +23,36 @@ class NetworksSerializer(serializers.ModelSerializer):
 
 
 class NetworksGroupSerializer(serializers.ModelSerializer):
-    # V31: read-only member-site count derived via network.network_group.
+    # V31+V34: writable direct membership list (site ids); `sites` = union of
+    # network-derived (network.network_group) and directly-picked sites, deduped.
+    member_sites = serializers.PrimaryKeyRelatedField(
+        many=True, queryset=Members.objects.all(), required=False
+    )
     sites = serializers.SerializerMethodField()
+    member_sites_detail = serializers.SerializerMethodField()
 
     class Meta:
         model = NetworksGroup
-        fields = ("id", "name", "sites")
+        fields = ("id", "name", "member_sites", "member_sites_detail", "sites")
 
     def get_sites(self, obj):
-        from members.models import Members
+        return (
+            Members.objects.filter(Q(network__network_group=obj) | Q(network_groups=obj))
+            .distinct()
+            .count()
+        )
 
-        return Members.objects.filter(network__network_group=obj).count()
+    def get_member_sites_detail(self, obj):
+        return [
+            {
+                "id": m.pk,
+                "name": m.name,
+                "network_name": m.network.name if m.network else None,
+            }
+            for m in obj.member_sites.all().order_by("name")
+        ]
+
+
 
 
 class NetworksViewSet(viewsets.mixins.RetrieveModelMixin, viewsets.mixins.ListModelMixin, viewsets.mixins.UpdateModelMixin, viewsets.GenericViewSet):
@@ -48,9 +70,9 @@ class NetworksViewSet(viewsets.mixins.RetrieveModelMixin, viewsets.mixins.ListMo
 
 
 class NetworksGroupViewSet(viewsets.ModelViewSet):
-    """Writable group CRUD (T1/T2). Create/rename/delete groups + assign networks by
-    setting each network's network_group FK (V31). Delete SET_NULL-orphans networks
-    (V32); never deletes sites (site membership is derived via network)."""
+    """Writable group CRUD (T1/T2 + V34). Create/rename/delete groups, assign networks
+    by setting each network's network_group FK, and pick member sites directly via the
+    member_sites M2M. Delete SET_NULL-orphans networks (V32); never deletes sites."""
 
     permission_classes = [IsAuthenticated]
     serializer_class = NetworksGroupSerializer

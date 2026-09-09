@@ -29,8 +29,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+type SiteOption = { id: number; name: string; network_name: string | null };
 type Network = { id: number; name: string; network_id: string; network_group: number | null };
-type NetworkGroup = { id: number; name: string; sites: number };
+type NetworkGroup = {
+  id: number;
+  name: string;
+  sites: number;
+  member_sites: number[];
+  member_sites_detail: SiteOption[];
+};
 type Org = { id: number; name: string; networks: number[]; is_no_org: boolean };
 
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -79,23 +86,39 @@ export function NetworksView({ isSuperuser }: { isSuperuser: boolean }) {
     }
   }, []);
 
-  React.useEffect(() => {
-    void load();
-  }, [load]);
-
   const groupName = (id: number | null) => groups.find((g) => g.id === id)?.name ?? "Ungroup";
-
   // --- group CRUD ---
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<NetworkGroup | null>(null);
   const [name, setName] = React.useState("");
   const [selected, setSelected] = React.useState<Set<number>>(new Set());
+  const [memberSites, setMemberSites] = React.useState<Set<number>>(new Set());
+  const [siteQuery, setSiteQuery] = React.useState("");
+  const [siteOptions, setSiteOptions] = React.useState<SiteOption[]>([]);
   const [deleteTarget, setDeleteTarget] = React.useState<NetworkGroup | null>(null);
+
+  // Debounced site search for the picker (V34).
+  React.useEffect(() => {
+    const q = siteQuery.trim();
+    if (!q) {
+      setSiteOptions([]);
+      return;
+    }
+    const t = setTimeout(() => {
+      void get<SiteOption[]>(`/api/backend/members/sites?search=${encodeURIComponent(q)}`)
+        .then(setSiteOptions)
+        .catch((e) => toast.error((e as Error).message));
+    }, 350);
+    return () => clearTimeout(t);
+  }, [siteQuery]);
 
   const openCreate = () => {
     setEditing(null);
     setName("");
     setSelected(new Set());
+    setMemberSites(new Set());
+    setSiteQuery("");
+    setSiteOptions([]);
     setDialogOpen(true);
   };
 
@@ -103,6 +126,9 @@ export function NetworksView({ isSuperuser }: { isSuperuser: boolean }) {
     setEditing(g);
     setName(g.name);
     setSelected(new Set(networks.filter((n) => n.network_group === g.id).map((n) => n.id)));
+    setMemberSites(new Set(g.member_sites ?? []));
+    setSiteQuery("");
+    setSiteOptions([]);
     setDialogOpen(true);
   };
 
@@ -115,6 +141,16 @@ export function NetworksView({ isSuperuser }: { isSuperuser: boolean }) {
     });
   };
 
+  const toggleSite = (id: number) => {
+    setMemberSites((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+
   const save = async () => {
     const trimmed = name.trim();
     if (!trimmed) {
@@ -123,12 +159,13 @@ export function NetworksView({ isSuperuser }: { isSuperuser: boolean }) {
     }
     setBusy(true);
     try {
+      const payload = { name: trimmed, member_sites: [...memberSites] };
       let groupId: number;
       if (editing) {
         groupId = editing.id;
-        await request("PATCH", `/api/backend/networks/groups/${editing.id}/`, { name: trimmed });
+        await request("PATCH", `/api/backend/networks/groups/${editing.id}/`, payload);
       } else {
-        const created = await request<NetworkGroup>("POST", "/api/backend/networks/groups/", { name: trimmed });
+        const created = await request<NetworkGroup>("POST", "/api/backend/networks/groups/", payload);
         groupId = created.id;
       }
       // Assign/unassign networks: diff current memberships against the selection.
@@ -290,6 +327,50 @@ export function NetworksView({ isSuperuser }: { isSuperuser: boolean }) {
                   </label>
                 ))}
               </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Member Sites (opsional)</Label>
+              <p className="text-muted-foreground text-sm">
+                Pilih situs secara langsung sebagai anggota grup (di luar situs yang otomatis lewat network).
+              </p>
+              <Input
+                value={siteQuery}
+                onChange={(e) => setSiteQuery(e.target.value)}
+                placeholder="Cari situs…"
+              />
+              <div className="max-h-40 overflow-y-auto rounded-md border p-2">
+                {!siteQuery.trim() && (
+                  <p className="text-muted-foreground text-sm">
+                    Ketik untuk mencari situs dari seluruh daftar.
+                  </p>
+                )}
+                {siteQuery.trim() && siteOptions.length === 0 && (
+                  <p className="text-muted-foreground text-sm">Tidak ada hasil.</p>
+                )}
+                {siteOptions.map((s) => (
+                  <label key={s.id} className="flex items-center gap-2 py-1">
+                    <Checkbox checked={memberSites.has(s.id)} onCheckedChange={() => toggleSite(s.id)} />
+                    <span className="text-sm">{s.name}</span>
+                    {s.network_name && (
+                      <span className="text-xs text-muted-foreground">({s.network_name})</span>
+                    )}
+                  </label>
+                ))}
+              </div>
+              {memberSites.size > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {(editing?.member_sites_detail ?? siteOptions)
+                    .filter((s) => memberSites.has(s.id))
+                    .map((s) => (
+                      <span
+                        key={s.id}
+                        className="bg-muted text-muted-foreground inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs"
+                      >
+                        {s.name}
+                      </span>
+                    ))}
+                </div>
+              )}
             </div>
             {editing && (
               <p className="text-muted-foreground text-sm">

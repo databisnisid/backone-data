@@ -5,6 +5,15 @@ from django.utils.translation import gettext_lazy as _
 class NetworksGroup(models.Model):
     name = models.CharField(_('Network Group'), max_length=50)
 
+    # V34: optional direct site membership (union with network-derived sites).
+    # String ref avoids circular import (members.models imports networks.models).
+    member_sites = models.ManyToManyField(
+        'members.Members',
+        verbose_name=_('Member Sites'),
+        blank=True,
+        related_name='network_groups',
+    )
+
     created_at = models.DateTimeField(auto_now=False, auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True, auto_now_add=False)
 

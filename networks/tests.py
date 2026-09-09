@@ -145,6 +145,47 @@ class NetworkGroupCrudTest(TestCase):
         self.assertEqual(r.data["sites"], 1)
 
 
+    def test_group_picks_member_sites_directly(self):
+        # V34: superuser assigns sites directly via member_sites ids.
+        from members.models import Members
+
+        self.client.force_authenticate(user=self.superuser)
+        group = NetworksGroup.objects.create(name="G")
+        s1 = Members.objects.create(name="Site1", member_id="S1", is_manual=False)
+        s2 = Members.objects.create(name="Site2", member_id="S2", is_manual=False)
+        r = self.client.patch(self._url(group.pk), {"member_sites": [s1.pk, s2.pk]}, format="json")
+        self.assertEqual(r.status_code, 200)
+        group.refresh_from_db()
+        self.assertEqual(set(group.member_sites.values_list("pk", flat=True)), {s1.pk, s2.pk})
+
+    def test_group_sites_is_union_deduped(self):
+        # V34: sites count = union of network-derived + directly-picked, no double-count.
+        from members.models import Members
+
+        self.client.force_authenticate(user=self.superuser)
+        group = NetworksGroup.objects.create(name="G")
+        # via network
+        self.net.network_group = group
+        self.net.save()
+        via_net = Members.objects.create(name="NetSite", member_id="N1", is_manual=False, network=self.net)
+        # directly picked (no network, or different network) — same site not double-counted
+        direct = Members.objects.create(name="DirectSite", member_id="D1", is_manual=False)
+        group.member_sites.add(direct)
+        r = self.client.get(self._url(group.pk))
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.data["sites"], 2)
+        self.assertCountEqual(r.data["member_sites"], [direct.pk])
+
+    def test_staff_cannot_assign_member_sites(self):
+        # V34: direct membership write is superuser-gated (same IsSuperUser gate).
+        from members.models import Members
+
+        self.client.force_authenticate(user=self.staff)
+        group = NetworksGroup.objects.create(name="G")
+        s = Members.objects.create(name="Site", member_id="S1", is_manual=False)
+        r = self.client.patch(self._url(group.pk), {"member_sites": [s.pk]}, format="json")
+        self.assertEqual(r.status_code, 403)
+
 
 class NetworkAssignmentTest(TestCase):
     """T1: superuser assigns a network to a group via PATCH networks/<id> network_group. Cites V31,V33."""

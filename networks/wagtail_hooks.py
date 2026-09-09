@@ -44,6 +44,7 @@ class NetworksGroupViewSet(SnippetViewSet):
     list_per_page = 100
     panels = [
         FieldPanel('name'),
+        FieldPanel('member_sites'),
     ]
 
 
