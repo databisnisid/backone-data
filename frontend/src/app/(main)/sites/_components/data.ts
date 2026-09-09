@@ -52,15 +52,6 @@ export type NetworkOption = { id: number; name: string; network_id: string };
 
 export const PAGE_SIZE = 25;
 
-export const SDWAN_CHOICES = [
-  "BackOne - SDWAN Lite",
-  "BackOne - SDWAN Pro",
-  "BackOne - SDWAN Gateway",
-  "BackOne - Tanpa SDWAN",
-];
-
-export const BAA_STATUS_CHOICES = ["New Link", "Upgrade Link", "Downgrade Link", "Relokasi"];
-
 // Role groups present in Django Groups (members.rbac mirrors these server-side).
 export const SUPPORT_ROLES = new Set(["Support"]);
 export const SALES_ROLES = new Set(["Sales"]);

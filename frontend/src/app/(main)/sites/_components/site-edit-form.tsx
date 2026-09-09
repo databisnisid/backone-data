@@ -12,15 +12,13 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
-import { createSiteLink, deleteSiteLink, fetchLinkServices, fetchSite, patchSiteLink, uploadSiteFile } from "./api";
+import { createSiteLink, deleteSiteLink, fetchLinkServices, fetchMemberOptions, fetchSite, patchSiteLink, uploadSiteFile, type MemberOptions } from "./api";
 import {
   isFinance,
   isPurchasing,
   isSales,
   isSupport,
   type Me,
-  SDWAN_CHOICES,
-  BAA_STATUS_CHOICES,
   type SiteLink,
   type SiteRow,
 } from "./data";
@@ -34,21 +32,21 @@ type ScalarDef = {
   choices?: string[];
 };
 
-function scalarDefsFor(me: Me): ScalarDef[] {
+function scalarDefsFor(me: Me, options: MemberOptions): ScalarDef[] {
   if (isSupport(me)) {
     return [
       { name: "name", label: "Nama Site", kind: "text" },
       { name: "address", label: "Alamat", kind: "text" },
       { name: "member_code", label: "Kode Situs", kind: "text" },
       { name: "project_number", label: "Project Number", kind: "text" },
-      { name: "sdwan_package", label: "Paket Layanan (SDWAN)", kind: "select", choices: SDWAN_CHOICES },
-      { name: "baa_status_category", label: "Status BAA", kind: "select", choices: BAA_STATUS_CHOICES },
+      { name: "sdwan_package", label: "Paket Layanan (SDWAN)", kind: "select", choices: options.sdwan_package },
+      { name: "baa_status_category", label: "Status BAA", kind: "select", choices: options.baa_status_category },
       { name: "notes", label: "Keterangan", kind: "textarea" },
     ];
   }
   if (isSales(me)) {
     return [
-      { name: "baa_status_category", label: "Status BAA", kind: "select", choices: BAA_STATUS_CHOICES },
+      { name: "baa_status_category", label: "Status BAA", kind: "select", choices: options.baa_status_category },
       { name: "notes", label: "Keterangan", kind: "textarea" },
     ];
   }
@@ -91,6 +89,20 @@ function useLinkServices(me: Me): { id: number; name: string }[] {
   return services;
 }
 
+function useMemberOptions(): MemberOptions {
+  const [options, setOptions] = React.useState<MemberOptions>({
+    sdwan_package: [],
+    baa_status_category: [],
+    role: [],
+  });
+  React.useEffect(() => {
+    fetchMemberOptions()
+      .then(setOptions)
+      .catch(() => setOptions({ sdwan_package: [], baa_status_category: [], role: [] }));
+  }, []);
+  return options;
+}
+
 function serviceName(services: { id: number; name: string }[], id: number | null): string {
   if (id == null) return "";
   return services.find((s) => s.id === id)?.name ?? String(id);
@@ -109,12 +121,25 @@ export function SiteEditForm({
   onDone: () => void;
   onRowUpdate: (r: SiteRow) => void;
 }) {
-  const scalarDefs = scalarDefsFor(me);
+  const memberOptions = useMemberOptions();
+  const scalarDefs = scalarDefsFor(me, memberOptions);
   const fileFields = fileFieldsFor(me);
-  // Synced (upstream) sites: core fields are read-only server-side (serializers.py).
-  // Show them but disabled so the user sees the value without hitting the 400.
+  // Synced (upstream) sites: CORE_EDIT_FIELDS (mirrors members/rbac.py) are
+  // rejected server-side, so render them disabled instead of letting superuser
+  // hit a 400. Feature fields stay editable.
   const isSynced = !row.is_manual;
-  const CORE_FIELD_NAMES = new Set(["name", "member_code", "address"]);
+  const CORE_FIELD_NAMES = new Set([
+    "name",
+    "member_code",
+    "member_id",
+    "address",
+    "location",
+    "online_at",
+    "offline_at",
+    "service_line",
+    "network",
+    "links",
+  ]);
   const coreReadOnly = (name: string) => isSynced && CORE_FIELD_NAMES.has(name);
   const [draft, setDraft] = React.useState<Record<string, string>>(() =>
     Object.fromEntries(
@@ -312,6 +337,7 @@ export function SiteEditForm({
           <div className="text-muted-foreground flex items-center gap-2 text-xs font-medium">
             <Link2 className="size-3.5" /> TAMBAH LINK
           </div>
+
           <div className="grid grid-cols-1 gap-2 md:grid-cols-5">
             <div className="flex flex-col gap-1">
               <FieldLabel htmlFor="link-role">Role</FieldLabel>
@@ -320,7 +346,7 @@ export function SiteEditForm({
                   <SelectValue placeholder="Role" />
                 </SelectTrigger>
                 <SelectContent>
-                  {["MAIN", "BACKUP", "SINGLE"].map((c) => (
+                  {memberOptions.role.map((c) => (
                     <SelectItem key={c} value={c}>
                       {c}
                     </SelectItem>

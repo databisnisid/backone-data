@@ -17,11 +17,12 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-import { createSite, fetchNetworks } from "./api";
-import { type NetworkOption, SDWAN_CHOICES } from "./data";
+import { createSite, fetchMemberOptions, fetchNetworks } from "./api";
+import { type NetworkOption } from "./data";
 
 export function CreateSiteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const [networks, setNetworks] = React.useState<NetworkOption[]>([]);
+  const [sdwanOptions, setSdwanOptions] = React.useState<string[]>([]);
   const [name, setName] = React.useState("");
   const [memberId, setMemberId] = React.useState("");
   const [address, setAddress] = React.useState("");
@@ -29,12 +30,14 @@ export function CreateSiteDialog({ open, onOpenChange }: { open: boolean; onOpen
   const [network, setNetwork] = React.useState<string>("");
   const [project, setProject] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
-
   React.useEffect(() => {
     if (open) {
       fetchNetworks()
         .then(setNetworks)
         .catch((e) => toast.error(e.message));
+      fetchMemberOptions()
+        .then((o) => setSdwanOptions(o.sdwan_package))
+        .catch(() => setSdwanOptions([]));
     }
   }, [open]);
 
@@ -112,7 +115,7 @@ export function CreateSiteDialog({ open, onOpenChange }: { open: boolean; onOpen
                 <SelectValue placeholder="Pilih..." />
               </SelectTrigger>
               <SelectContent>
-                {SDWAN_CHOICES.map((c) => (
+                {sdwanOptions.map((c) => (
                   <SelectItem key={c} value={c}>
                     {c}
                   </SelectItem>

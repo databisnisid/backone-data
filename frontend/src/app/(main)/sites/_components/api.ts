@@ -61,6 +61,16 @@ export async function fetchLinkServices() {
   const data = await jsonOrThrow<{ id: number; name: string }[]>(res);
   return Array.isArray(data) ? data : [];
 }
+export type MemberOptions = {
+  sdwan_package: string[];
+  baa_status_category: string[];
+  role: string[];
+};
+
+export async function fetchMemberOptions() {
+  const res = await fetch("/api/backend/members/options/");
+  return jsonOrThrow<MemberOptions>(res);
+}
 
 export async function createSiteLink(memberId: number, link: Partial<SiteLink>) {
   const payload: Record<string, unknown> = { ...link, member: memberId };
