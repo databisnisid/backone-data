@@ -26,7 +26,7 @@ export async function fetchNetworks() {
 }
 
 export async function patchSite(id: number, payload: Record<string, unknown>) {
-  const res = await fetch(`/api/backend/members/sites/${id}`, {
+  const res = await fetch(`/api/backend/members/sites/${id}/`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -73,7 +73,7 @@ export async function createSiteLink(memberId: number, link: Partial<SiteLink>) 
 }
 
 export async function patchSiteLink(id: number, link: Record<string, unknown>) {
-  const res = await fetch(`/api/backend/members/links/${id}`, {
+  const res = await fetch(`/api/backend/members/links/${id}/`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(link),
@@ -82,6 +82,6 @@ export async function patchSiteLink(id: number, link: Record<string, unknown>) {
 }
 
 export async function deleteSiteLink(id: number) {
-  const res = await fetch(`/api/backend/members/links/${id}`, { method: "DELETE" });
+  const res = await fetch(`/api/backend/members/links/${id}/`, { method: "DELETE" });
   if (!res.ok) throw new Error(`Request failed (${res.status})`);
 }

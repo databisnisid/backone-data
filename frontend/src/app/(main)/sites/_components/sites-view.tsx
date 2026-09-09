@@ -84,7 +84,6 @@ function Cols({ me, cols, row, onEdit }: { me: Me; cols: ColVisibility; row: Sit
         <TableCell>
           <div className="font-medium">{row.name ?? row.member_id}</div>
           <div className="text-muted-foreground text-xs">{row.address ?? "-"}</div>
-          {row.ip_address && <div className="text-muted-foreground text-xs">IP: {row.ip_address}</div>}
         </TableCell>
       )}
       {cols.layanan && (

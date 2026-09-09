@@ -39,7 +39,6 @@ function scalarDefsFor(me: Me): ScalarDef[] {
     return [
       { name: "name", label: "Nama Site", kind: "text" },
       { name: "address", label: "Alamat", kind: "text" },
-      { name: "ip_address", label: "IP Address (Support Generated)", kind: "text" },
       { name: "member_code", label: "Kode Situs", kind: "text" },
       { name: "project_number", label: "Project Number", kind: "text" },
       { name: "sdwan_package", label: "Paket Layanan (SDWAN)", kind: "select", choices: SDWAN_CHOICES },

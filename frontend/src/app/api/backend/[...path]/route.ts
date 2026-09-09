@@ -6,9 +6,16 @@ type Ctx = { params: Promise<{ path: string[] }> };
 
 async function proxy(req: Request, _ctx: Ctx, method: string): Promise<NextResponse> {
   const url = new URL(req.url);
-  // Preserve the exact remainder (incl. trailing slash) after /api/backend
+  // Preserve the exact remainder after /api/backend
   const PREFIX = "/api/backend/";
-  const target = `/api/${url.pathname.startsWith(PREFIX) ? url.pathname.slice(PREFIX.length) : ""}${url.search}`;
+  let targetPath = url.pathname.startsWith(PREFIX) ? url.pathname.slice(PREFIX.length) : "";
+  // Next normalizes/strips trailing slashes before the proxy runs (308 on PATCH/POST),
+  // but annotations Django/DRF routers (APPEND_SLASH) need the slash on write methods.
+  // Re-append it so Django never sees a slashed detail URL it can't 301-redirect safely.
+  if (!["GET", "HEAD"].includes(method) && !targetPath.endsWith("/")) {
+    targetPath += "/";
+  }
+  const target = `/api/${targetPath}${url.search}`;
 
   const body = method === "GET" || method === "HEAD" ? undefined : await req.arrayBuffer();
   const headers = new Headers(req.headers);

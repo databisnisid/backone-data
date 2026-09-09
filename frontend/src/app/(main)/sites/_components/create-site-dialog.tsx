@@ -25,7 +25,6 @@ export function CreateSiteDialog({ open, onOpenChange }: { open: boolean; onOpen
   const [name, setName] = React.useState("");
   const [memberId, setMemberId] = React.useState("");
   const [address, setAddress] = React.useState("");
-  const [ipAddress, setIpAddress] = React.useState("");
   const [sdwan, setSdwan] = React.useState<string>("");
   const [network, setNetwork] = React.useState<string>("");
   const [project, setProject] = React.useState("");
@@ -43,7 +42,6 @@ export function CreateSiteDialog({ open, onOpenChange }: { open: boolean; onOpen
     setName("");
     setMemberId("");
     setAddress("");
-    setIpAddress("");
     setSdwan("");
     setNetwork("");
     setProject("");
@@ -60,7 +58,6 @@ export function CreateSiteDialog({ open, onOpenChange }: { open: boolean; onOpen
         name,
         member_id: memberId,
         address: address || null,
-        ip_address: ipAddress || null,
         sdwan_package: sdwan || null,
         project_number: project || null,
         network: network ? Number(network) : null,
@@ -107,15 +104,6 @@ export function CreateSiteDialog({ open, onOpenChange }: { open: boolean; onOpen
           <Field className="gap-1.5">
             <FieldLabel htmlFor="new-address">Alamat</FieldLabel>
             <Input id="new-address" value={address} onChange={(e) => setAddress(e.target.value)} />
-          </Field>
-          <Field className="gap-1.5">
-            <FieldLabel htmlFor="new-ip">IP Address (Support Generated)</FieldLabel>
-            <Input
-              id="new-ip"
-              value={ipAddress}
-              onChange={(e) => setIpAddress(e.target.value)}
-              placeholder="192.168.1.10"
-            />
           </Field>
           <Field className="gap-1.5">
             <FieldLabel htmlFor="new-sdwan">Paket Layanan (SDWAN)</FieldLabel>
