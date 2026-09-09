@@ -132,6 +132,7 @@ Unchanged: `0 * * * * python /app/manage.py shell --command "from config.workers
 | V25 | **Dismantled-site visibility**: `offline_at <= now` (dismantled) sites remain READ + summarizable for role-filtered users (Sales/Finance/Purchasing) — allows PO/invoice fill on dismantled sites and correct per-group dismantle counts. Only the default "active sites" list filters them out; aggregates + detail must not double-filter (BLOCK-2 fix) |
 
 | V26 | **Site table fits viewport** — `/sites` list renders without horizontal scroll on desktop; the Action ("Ubah") column is visible without scrolling. Columns compress/truncate cell content (never drop a column) so the last column stays on-screen |
+| V27 | **No global top-header search** — `(main)` shell header shows sidebar toggle + page title only; SearchDialog command palette (trigger button + ⌘J palette) not rendered in any `(main)` page. Per-page search (sites list "Pencarian sites...") unaffected |
 
 ## §T — Tasks
 
@@ -167,6 +168,7 @@ Unchanged: `0 * * * * python /app/manage.py shell --command "from config.workers
 | T27 | ✅ | Backend: fix role queryset (`member_queryset_for`) so dismantled (`offline_at<=now`) sites stay READ+summarizable Sales/Finance/Purchasing — separate active-sites filter aggregate/detail visibility; per-group dismantle count over full role set, not active queryset; add dismantle filter param sites list | C22,V22,V25 |
 
 | T28 | x | FE: `/sites` table — fit columns to viewport (compress/truncate per-cell, no `overflow-x-auto` horizontal scroll; keep all columns), Action/"Ubah" always visible at typical desktop width | C13,V26 |
+| T29 | x | FE: remove global header search — drop `<SearchDialog />` from `(main)/layout.tsx` header + import; delete obsolete `search-dialog.tsx` + `components/ui/command.tsx` (used only by it); header = sidebar toggle + page title | V27 |
 
 ## §B — Bugs
 
