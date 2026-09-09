@@ -36,7 +36,12 @@ Rework BackOne Data into full decoupled app: Next.js frontend (React 19, App Rou
 | C25 | API stays **string in/out**: `SlugRelatedField(slug_field="name")` resolves the string→lookup row on write, returns the lookup `name` string on read. FE unchanged for the *values*; the *option lists* now come from an endpoint, not hard-coded arrays |
 | C26 | Seed rows (prod-distinct): SDWAN `{BackOne - SDWAN Lite, Pro, Gateway, Tanpa SDWAN}`; BAA `{New Link, Upgrade Link, Downgrade Link, Relokasi}`; role `{MAIN, BACKUP, SINGLE}`. Backfill maps existing string→row (prod has only `BackOne - SDWAN Pro`, `New Link`, `BACKUP`) |
 | C27 | Migration `members.0012`: `CharField`→FK on `Members.sdwan_package`/`baa_status_category` + `MemberLink.role`; new tables seeded + backfilled in a data migration. MySQL prod |
-## §R — Research
+
+| C28 | **Superuser-only lookup management**: FE page `/settings/lookups` + the lookup CRUD endpoints are accessible to superuser only — FE gate (`me.is_superuser`) on nav+route AND a custom DRF permission checking `request.user.is_superuser` on every endpoint method (**not** `IsAdminUser` — that gates `is_staff`, so a staff-not-superuser Wagtail admin would gain write access) (no client-side-only bypass) |
+| C29 | **New DRF lookup CRUD endpoints**, not Wagtail snippet admin: `/api/lookups/{sdwan,baa,role}/` list+create and `<id>/` rename, all under a custom `IsSuperUser` permission (`is_superuser`); serializer exposes `{id, name}`. Wagtail snippet admin is HTML/CSRF, doesn't fit the JWT SPA (C5). `kind` ∈ {sdwan, baa, role} → the three models |
+| C30 | **Config-only page**: `/settings/lookups` manages only the three shared value lists. Per-site assignment stays in `/sites` (existing `/api/members/options/` read), no duplicated picker |
+| C31 | **One page, 3 sections**: `/settings/lookups` renders SDWAN/BAA/Role sections from a single reusable list component parameterized by `kind` — no per-table route |
+| C32 | **Create + rename only, no delete** (mirrors V33 + FK `PROTECT`); rename to an existing name → 400 (unique on `name`) surfaced in UI, never silently merged |
 
 | ID | Ruling | Source |
 |---|---|---|
@@ -59,7 +64,10 @@ Rework BackOne Data into full decoupled app: Next.js frontend (React 19, App Rou
 | Django | `/api/sites/<id>/files/` | DRF upload endpoint | BAA/PO/BAP/invoice file upload |
 | Django | `/api/sites/export.xlsx` | DRF export | Server-side XLSX |
 | Django | `/api/members/options/` | DRF ViewSet action | Lookup options for the three dropdowns (sdwan/baa/role), string list — feeds FE selects (C25) |
-| Django | `/api/quota/` | DRF ViewSet | Read-only Quota lists |
+
+| Django | `/api/lookups/{kind}/` | DRF ViewSet | List + create lookup values for `kind` ∈ {sdwan,baa,role} — `IsAdminUser` (C28,C29) |
+| Django | `/api/lookups/{kind}/<id>/` | DRF ViewSet | Rename a lookup value (PATCH) — `IsAdminUser` (C29,C32) |
+| Next | `/settings/lookups` | Next page | Superuser-only lookup config page (C28,C30,C31) |
 | Django | `/api/networks/`, `/api/organizations/` | DRF ViewSets | Read-only lists for selects/menus |
 | Django | `/` (root) | Wagtail admin (`include(wagtailadmin_urls)`) | Live admin: login + homepage/map dashboard + snippet menus (C7) |
 | Django | `/django-admin/` | Stock Django admin | Superuser-only debug/bootstrap console (C7) |
@@ -140,7 +148,14 @@ Unchanged: `0 * * * * python /app/manage.py shell --command "from config.workers
 | V26 | **Site table fits viewport** — `/sites` list renders without horizontal scroll on desktop; the Action ("Ubah") column is visible without scrolling. Columns compress/truncate cell content (never drop a column) so the last column stays on-screen |
 | V27 | **No global top-header search** — `(main)` shell header shows sidebar toggle + page title only; SearchDialog command palette (trigger button + ⌘J palette) not rendered in any `(main)` page. Per-page search (sites list "Pencarian sites...") unaffected |
 | V28 | **No sidebar Quick Create/Inbox row** — `(main)` app sidebar opens directly on the nav-groups block; the primary "Quick Create" button + adjacent Inbox button are not rendered in any sidebar state (expanded or icon-collapsed). Nav groups/routes unchanged |
-| V29 | **BackOne logo mark in brand slots** — the BackOne logo SVG (`public/backone-logo.svg`, served by the FE container) renders as the brand mark in the app sidebar header and the login page left panel (replacing the generic Globe icons) and as the browser-tab favicon (`metadata.icons`). Brand text beside the mark unchanged. Asset is FE-served (dedicated container), not imported from backend static |
+
+| V37 | **Lookup CRUD is superuser-only end to end**: `/api/lookups/*` methods are under a custom `IsSuperUser` permission checking `request.user.is_superuser` (write AND read) — **not** `IsAdminUser` (that gates `is_staff`, so a staff-not-superuser Wagtail admin would gain access). `/settings/lookups` route + sidebar item gate on `me.is_superuser`. A non-superuser calling the API directly gets 403 — FE gate is cosmetic, DRF is the boundary (C28) |
+| V38 | **Lookup `name` DB-unique per table** — `unique=True` on `SdwanPackage.name`, `BaaStatus.name`, `LinkRole.name` (new migration). Duplicate create/rename → 400 (DB unique + serializer validation) surfaced as an inline error, never merged or silently deduped. Guarantees `SlugRelatedField` never hits `MultipleObjectsReturned` (guards the V32 read path for `/sites`) (C32) |
+| V39 | **Lookup CRUD never deletes, structurally** — `LookupViewSet` extends `GenericViewSet` + `List`/`Create`/`Update` mixins (or `http_method_names` excluding `delete`), so no `DELETE` route exists to call. Values are add/rename only; removing an in-use value is impossible (FK `PROTECT`) and no endpoint exposes it (V33) |
+| V40 | **`/api/members/options/` stays the FE read source for `/sites`** — the new `/api/lookups/*` list is a separate superuser-only surface; the `/sites` selects keep pulling from `/api/members/options/` (C25,V31). No FE dropdown regressions |
+| V41 | **Lookup nav + route gate on `me.is_superuser`, plumbed end to end** — `getCurrentUser()` (main layout) includes `is_superuser`; sidebar rendering filters the `/settings/lookups` item out unless `is_superuser`; `/settings/lookups` route redirects non-superusers to `/dashboard/default`. A non-superuser sees no nav entry and cannot reach the route (C28) |
+| V43 | **Superuser permission is `is_superuser`, not `IsAdminUser`** — a custom permission class (e.g. `IsSuperUser`) checks `request.user.is_superuser`; DRF `IsAdminUser` (gates `is_staff`) is NOT used, else a staff-not-superuser Wagtail admin gains lookup write access (C28,C29) |
+| V44 | **No DELETE route is exposed** — the view is built from mixins that exclude destroy (or `http_method_names` omits `delete`), and the router/URL conf never mounts a destroy route, so deletion is structurally impossible (C32) |
 | V30 | **Login left panel shows random photo** — desktop login left panel (`lg:w-1/3`, previously `bg-primary`) renders a random photo from `picsum.photos` as background instead of the flat black/primary color; BackOne logo + "BackOne Data" title stay overlaid and legible (translucent dark scrim behind the text). Mobile (`<lg`) panel stays hidden |
 | V31 | Lookup tables are the sole source of SDWAN/BAA/role options — no hard-coded choice arrays remain in backend models or FE `data.ts`. **FE dropdowns load options from `/api/members/options/`**, not a static list |
 | V32 | `sdwan_package`/`baa_status_category`/`role` resolve string→FK server-side on write (`SlugRelatedField(slug_field="name")`), emit the lookup `name` string on read (C25). A value not in the table is rejected (serializer `SlugRelatedField` validation), preserving V7's serializer-boundary enforcement |
@@ -177,7 +192,11 @@ Unchanged: `0 * * * * python /app/manage.py shell --command "from config.workers
 | T24 | ✅ | FE: member_links editor — "Add link" per site (create-first; 0/100 prod sites have links), inline edit/delete after creation; fields role/service/provider/capacity/sid | V21,V24 |
 
 | T25 | ✅ | FE: file upload UI for feature files on synced sites (PO user / PO vendor / invoice) → BFF multipart → Django upload; size/ext errors surface (10MB, PDF/XLS/XLSX/DOC/DOCX) | C23,T13,V20 |
-| T26 | ✅ | FE: dashboard — group cards for BAA per group + Invoice per group (network_group), dismantle count folded into Online/Offline; keep Top Networks | C22,V22 |
+
+| T38 | ✅ | Backend: migration — add DB `unique=True` on `SdwanPackage.name`/`BaaStatus.name`/`LinkRole.name` (V38); `LookupViewSet`(s) — `/api/lookups/{kind}/` list+create, `<id>/` PATCH rename, custom `IsSuperUser` permission (`is_superuser`) on all methods (**not** `IsAdminUser`); serializer `{id, name}`; view built from mixins excluding destroy (no DELETE route, V39); `kind` → `SdwanPackage`/`BaaStatus`/`LinkRole` | C28,C29,C32,V37,V38,V39,V43,V44 |
+| T39 | ✅ | FE: `/settings/lookups` page + sidebar item gated on `me.is_superuser` — **plumb `is_superuser` into the nav chain** (`getCurrentUser()` in main layout → `NavUserInfo` → sidebar), filter the `/settings/lookups` item out unless `is_superuser`; 3 sections (SDWAN/BAA/Role) from one reusable component parameterized by `kind`; config-only, no assignment UI; add + rename flows to the DRF endpoints | C28,C30,C31,C32,V37,V41 |
+| T40 | ✅ | FE: route guard — `/settings/lookups` redirects non-superusers to `/dashboard/default`; superuser only. Backend rejects any direct non-superuser API call (custom permission, 403) (V37) | C28,V37,V43 |
+| T41 | ✅ | Verified: superuser sees `/settings/lookups` + can add/rename in all 3 sections; non-superuser gets no nav entry, route redirect, and 403 on direct API call; duplicate name → inline 400; `/sites` selects still work from `/api/members/options/` (V40); 27 backend tests + `manage.py check` pass | V37,V38,V39,V40,V41,V43,V44 |
 | T27 | ✅ | Backend: fix role queryset (`member_queryset_for`) so dismantled (`offline_at<=now`) sites stay READ+summarizable Sales/Finance/Purchasing — separate active-sites filter aggregate/detail visibility; per-group dismantle count over full role set, not active queryset; add dismantle filter param sites list | C22,V22,V25 |
 
 | T28 | x | FE: `/sites` table — fit columns to viewport (compress/truncate per-cell, no `overflow-x-auto` horizontal scroll; keep all columns), Action/"Ubah" always visible at typical desktop width | C13,V26 |
