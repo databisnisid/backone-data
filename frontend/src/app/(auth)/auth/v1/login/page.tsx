@@ -1,23 +1,14 @@
 import { Suspense } from "react";
 
+import { LoginBrandPanel } from "./_components/login-brand-panel";
+
 
 import { LoginForm } from "../../_components/login-form";
 
 export default function LoginV1() {
   return (
     <div className="flex h-dvh">
-      <div className="hidden bg-primary lg:block lg:w-1/3">
-        <div className="flex h-full flex-col items-center justify-center p-12 text-center">
-          <div className="space-y-6">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/backone-logo.svg" alt="BackOne" className="mx-auto size-16" />
-            <div className="space-y-2">
-              <h1 className="font-light text-5xl text-primary-foreground">BackOne Data</h1>
-              <p className="text-primary-foreground/80 text-xl">Dashboard manajemen situs jaringan</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <LoginBrandPanel />
 
       <div className="flex w-full items-center justify-center bg-background p-8 lg:w-2/3">
         <Suspense fallback={<div className="h-[360px]" />}>
