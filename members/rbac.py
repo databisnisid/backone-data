@@ -29,7 +29,7 @@ CORE_EDIT_FIELDS = (
 )
 
 WRITE_BY_ROLE = {
-    "Superuser": set(CORE_EDIT_FIELDS + FEATURE_FIELDS),
+    "Superuser": set(CORE_EDIT_FIELDS + FEATURE_FIELDS) | {"member_links"},
     "Support": set(CORE_EDIT_FIELDS + FEATURE_FIELDS),
     "Sales": {"baa_status_category", "upload_baa", "notes", "member_links"},
     "Purchasing": {"po_file_vendor"},
