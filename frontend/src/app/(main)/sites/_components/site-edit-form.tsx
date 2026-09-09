@@ -131,7 +131,6 @@ export function SiteEditForm({
   const isSynced = !row.is_manual;
   const CORE_FIELD_NAMES = new Set([
     "name",
-    "member_code",
     "member_id",
     "address",
     "location",
