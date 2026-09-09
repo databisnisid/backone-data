@@ -238,3 +238,16 @@ class MemberLinkViewSet(viewsets.ModelViewSet):
         self._assert_sales_write()
         instance.delete()
 
+    @action(detail=False, methods=["get"], url_path="services")
+    def services(self, request):
+        """List Link (service) options for the Add-link editor — readable by any authenticated role."""
+        from .models import Links
+        from rest_framework import serializers
+
+        class LinkOptionSerializer(serializers.ModelSerializer):
+            class Meta:
+                model = Links
+                fields = ("id", "name")
+
+        opts = LinkOptionSerializer(Links.objects.all().order_by("name"), many=True)
+        return Response(opts.data)

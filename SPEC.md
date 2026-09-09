@@ -157,11 +157,11 @@ Unchanged: `0 * * * * python /app/manage.py shell --command "from config.workers
 | T20 | ✅ | Backend: relax synced-write gate in `MemberSerializer.update` + `MemberFileSerializer.update` — allow feature fields in role's `writable_fields` on synced, deny CORE/identity on synced (V20). Update `_assert_writable` to drive gate | V5,V20 |
 | T21 | ✅ | Backend: **new nested MemberLink write** — replace `member_links=MemberLinkSerializer(many=True, read_only=True)` with writable nested serializer; add `MemberLinkViewSet`(s) or nested action under `SitesViewSet` for create/update/delete of links on synced+manual; Sales-only per V23; ParentalKey children saved via `save_child_instances` (ClusterableModel), never raw `.save()` bypassing RBAC | V21,V24 |
 | T22 | ✅ | Backend: dashboard aggregate endpoint per `network_group` — BAA count (`upload_baa!=null`), invoice count (`invoice_number!=null`), dismantle count (`offline_at!=null`); Top Networks retained | C22,V22 |
-| T23 | . | FE: `/sites` grid — replace blanket "no Ubah on synced" with role-scoped edit affordance (T12 superseded): Sales edits PO user/link/BAA status, Finance invoice, Purchasing PO vendor; core cols stay read-only | C8,V5,V20 |
-| T24 | . | FE: member_links editor — "Add link" per site (create-first; 0/100 prod sites have links), inline edit/delete after creation; fields role/service/provider/capacity/sid | V21 |
+| T23 | ✅ | FE: `/sites` grid — replace blanket "no Ubah on synced" with role-scoped edit affordance (T12 superseded): Sales edits PO user/link/BAA status, Finance invoice, Purchasing PO vendor; core cols stay read-only | C8,V5,V20 |
+| T24 | ✅ | FE: member_links editor — "Add link" per site (create-first; 0/100 prod sites have links), inline edit/delete after creation; fields role/service/provider/capacity/sid | V21,V24 |
 
-| T25 | . | FE: file upload UI for feature files on synced sites (PO user / PO vendor / invoice) → BFF multipart → Django upload; size/ext errors surface (10MB, PDF/XLS/XLSX/DOC/DOCX) | C23,T13 |
-| T26 | . | FE: dashboard — group cards for BAA per group + Invoice per group (network_group), dismantle count folded into Online/Offline; keep Top Networks | C22,V22
+| T25 | ✅ | FE: file upload UI for feature files on synced sites (PO user / PO vendor / invoice) → BFF multipart → Django upload; size/ext errors surface (10MB, PDF/XLS/XLSX/DOC/DOCX) | C23,T13,V20 |
+| T26 | ✅ | FE: dashboard — group cards for BAA per group + Invoice per group (network_group), dismantle count folded into Online/Offline; keep Top Networks | C22,V22 |
 | T27 | ✅ | Backend: fix role queryset (`member_queryset_for`) so dismantled (`offline_at<=now`) sites stay READ+summarizable Sales/Finance/Purchasing — separate active-sites filter aggregate/detail visibility; per-group dismantle count over full role set, not active queryset; add dismantle filter param sites list | C22,V22,V25 |
 
 ## §B — Bugs
