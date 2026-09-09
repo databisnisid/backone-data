@@ -1,6 +1,6 @@
 from crum import get_current_user
 from django.core.exceptions import ObjectDoesNotExist
-from wagtail.snippets.views.snippets import SnippetViewSet
+from wagtail.snippets.views.snippets import SnippetViewSet, SnippetViewSetGroup
 from wagtail.snippets.models import register_snippet
 from wagtail.admin.panels import (
     FieldPanel,
@@ -158,7 +158,7 @@ class SdwanPackageViewSet(SnippetViewSet):
     model = SdwanPackage
     menu_label = "SDWAN Packages"
     menu_icon = "tag"
-    add_to_admin_menu = True
+    add_to_admin_menu = False
     menu_order = 301
     list_display = ("name",)
     search_fields = ("name",)
@@ -173,7 +173,7 @@ class BaaStatusViewSet(SnippetViewSet):
     model = BaaStatus
     menu_label = "BAA Statuses"
     menu_icon = "tag"
-    add_to_admin_menu = True
+    add_to_admin_menu = False
     menu_order = 302
     list_display = ("name",)
     search_fields = ("name",)
@@ -188,7 +188,7 @@ class LinkRoleViewSet(SnippetViewSet):
     model = LinkRole
     menu_label = "Link Roles"
     menu_icon = "tag"
-    add_to_admin_menu = True
+    add_to_admin_menu = False
     menu_order = 303
     list_display = ("name",)
     search_fields = ("name",)
@@ -199,6 +199,11 @@ class LinkRoleViewSet(SnippetViewSet):
         return False
 
 
-register_snippet(SdwanPackageViewSet)
-register_snippet(BaaStatusViewSet)
-register_snippet(LinkRoleViewSet)
+class LookupTablesGroup(SnippetViewSetGroup):
+    items = (SdwanPackageViewSet, BaaStatusViewSet, LinkRoleViewSet)
+    menu_label = "Lookup Tables"
+    menu_icon = "cog"
+    add_to_settings_menu = True
+
+
+register_snippet(LookupTablesGroup)
