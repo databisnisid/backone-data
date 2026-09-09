@@ -8,26 +8,6 @@ from networks.models import Networks
 from links.models import Links
 
 
-SDWAN_PACKAGE_CHOICES = [
-    ("BackOne - SDWAN Lite", "BackOne - SDWAN Lite"),
-    ("BackOne - SDWAN Pro", "BackOne - SDWAN Pro"),
-    ("BackOne - SDWAN Gateway", "BackOne - SDWAN Gateway"),
-    ("BackOne - Tanpa SDWAN", "BackOne - Tanpa SDWAN"),
-]
-
-BAA_STATUS_CHOICES = [
-    ("New Link", "New Link"),
-    ("Upgrade Link", "Upgrade Link"),
-    ("Downgrade Link", "Downgrade Link"),
-    ("Relokasi", "Relokasi"),
-]
-
-LINK_ROLE_CHOICES = [
-    ("MAIN", "MAIN"),
-    ("BACKUP", "BACKUP"),
-    ("SINGLE", "SINGLE"),
-]
-
 
 # class Members(models.Model):
 class SdwanPackage(models.Model):
@@ -412,7 +392,7 @@ class MemberLink(models.Model):
         verbose_name_plural = _("Member Links")
 
     def __str__(self):
-        return "%s %s - %s" % (self.role, self.service or "", self.provider or "")
+        return "%s %s - %s" % (self.role.name if self.role else "", self.service or "", self.provider or "")
 
 
 

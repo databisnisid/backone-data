@@ -1,6 +1,6 @@
 import os
 from rest_framework import serializers
-from .models import Members, MemberLink, Links, SDWAN_PACKAGE_CHOICES, BAA_STATUS_CHOICES
+from .models import Members, MemberLink, Links, SdwanPackage, BaaStatus, LinkRole
 from .rbac import writable_fields, readable_fields, CORE_EDIT_FIELDS
 
 
@@ -8,8 +8,11 @@ class MemberLinkSerializer(serializers.ModelSerializer):
     member = serializers.PrimaryKeyRelatedField(
         queryset=Members.objects.all(), write_only=True, required=False
     )
+    role = serializers.SlugRelatedField(
+        slug_field="name", queryset=LinkRole.objects.all(), required=False, allow_null=True
+    )
     service = serializers.PrimaryKeyRelatedField(
-        queryset=Links.objects.all(), allow_null=True, required=False
+        queryset=Links.objects.all(), required=False, allow_null=True
     )
 
     class Meta:
@@ -24,11 +27,17 @@ class MemberSerializer(serializers.ModelSerializer):
     is_online = serializers.SerializerMethodField()
     links = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
 
-    sdwan_package = serializers.ChoiceField(
-        choices=SDWAN_PACKAGE_CHOICES, required=False, allow_null=True, allow_blank=True
+    sdwan_package = serializers.SlugRelatedField(
+        slug_field="name",
+        queryset=SdwanPackage.objects.all(),
+        required=False,
+        allow_null=True,
     )
-    baa_status_category = serializers.ChoiceField(
-        choices=BAA_STATUS_CHOICES, required=False, allow_null=True, allow_blank=True
+    baa_status_category = serializers.SlugRelatedField(
+        slug_field="name",
+        queryset=BaaStatus.objects.all(),
+        required=False,
+        allow_null=True,
     )
 
     class Meta:

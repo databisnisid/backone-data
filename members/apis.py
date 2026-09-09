@@ -192,9 +192,9 @@ class SitesViewSet(viewsets.ModelViewSet):
                 "network_group": network_group,
                 "service_line": m.service_line or "",
                 "ip_address": m.ip_address or "",
-                "sdwan_package": m.sdwan_package or "",
+                "sdwan_package": m.sdwan_package.name if m.sdwan_package else "",
                 "project_number": m.project_number or "",
-                "baa_status_category": m.baa_status_category or "",
+                "baa_status_category": m.baa_status_category.name if m.baa_status_category else "",
                 "invoice_number": m.invoice_number or "",
                 "notes": m.notes or "",
             }
