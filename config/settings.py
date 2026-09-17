@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 import os
+from datetime import timedelta
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -204,8 +205,14 @@ WAGTAIL_ENABLE_UPDATE_CHECK = False
 
 
 # AXES
-AXES_COOLOFF_TIME = float(os.getenv('AXES_COOLOFF_TIME', 2))
+# AXES_COOLOFF_TIME is read as MINUTES (int/float are hours in django-axes, so
+# we normalise here — a bare `2` used to silently mean 2 HOURS).
+AXES_COOLOFF_TIME = timedelta(minutes=float(os.getenv('AXES_COOLOFF_TIME', 30)))
 AXES_RESET_ON_SUCCESS = True
+# A locked-out user's cool-off MUST run down. With the django-axes default
+# (True) every retry while locked — even one with the correct password —
+# rewrites attempt_time and restarts the full window, so retrying never heals.
+AXES_RESET_COOL_OFF_ON_FAILURE_DURING_LOCKOUT = False
 AXES_LOCKOUT_PARAMETERS = ['username']
 AXES_LOCKOUT_TEMPLATE = 'axes/block.html'
 AXES_IPWARE_PROXY_COUNT = int(os.getenv('AXES_IPWARE_PROXY_COUNT', 0))
@@ -263,7 +270,6 @@ def filter_wagtail_api_paths(endpoints, **kwargs):
 
 
 # SIMPLE JWT
-from datetime import timedelta
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
