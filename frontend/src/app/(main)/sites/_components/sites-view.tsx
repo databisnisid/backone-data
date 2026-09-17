@@ -96,7 +96,7 @@ function Cols({ me, cols, row, onEdit }: { me: Me; cols: ColVisibility; row: Sit
           <div className="font-medium">{row.name ?? row.member_id}</div>
           <div className="text-muted-foreground text-xs">{row.address ?? "-"}</div>
           {/* C57/V60: dismantled rows are marked by TEXT, not colour alone. */}
-          {!row.is_online && <Badge variant="outline">Dismantled</Badge>}
+          {!row.is_online && <Badge variant="destructive">Dismantled</Badge>}
         </TableCell>
       )}
       {cols.layanan && (
