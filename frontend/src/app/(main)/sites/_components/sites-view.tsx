@@ -65,7 +65,7 @@ function SiteLinks({ links }: { links: SiteLink[] }) {
             LINK {l.role} {l.service ? `- ${l.service}` : ""}
           </span>
           <div className="text-muted-foreground">
-            {[l.provider, l.capacity, l.sid ? `SID: ${l.sid}` : null].filter(Boolean).join(" | ")}
+            {[l.provider, l.capacity ? `CID: ${l.capacity}` : null, l.sid ? `SID: ${l.sid}` : null].filter(Boolean).join(" | ")}
           </div>
         </div>
       ))}

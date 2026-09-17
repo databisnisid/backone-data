@@ -321,7 +321,7 @@ export function SiteEditForm({
                   LINK {l.role} {l.service ? `- ${serviceName(services, l.service)}` : ""}
                 </span>
                 <div className="text-muted-foreground text-xs">
-                  {[l.provider, l.capacity, l.sid ? `SID: ${l.sid}` : null].filter(Boolean).join(" | ")}
+                  {[l.provider, l.capacity ? `CID: ${l.capacity}` : null, l.sid ? `SID: ${l.sid}` : null].filter(Boolean).join(" | ")}
                 </div>
                 <button
                   type="button"
@@ -380,7 +380,7 @@ export function SiteEditForm({
               <Input id="link-provider" value={newLink.provider ?? ""} onChange={(e) => setNewLink((n) => ({ ...n, provider: e.target.value }))} />
             </div>
             <div className="flex flex-col gap-1">
-              <FieldLabel htmlFor="link-capacity">Capacity</FieldLabel>
+              <FieldLabel htmlFor="link-capacity">CID</FieldLabel>
               <Input id="link-capacity" value={newLink.capacity ?? ""} onChange={(e) => setNewLink((n) => ({ ...n, capacity: e.target.value }))} />
             </div>
             <div className="flex flex-col gap-1">

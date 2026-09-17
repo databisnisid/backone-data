@@ -48,6 +48,7 @@ Rework BackOne Data into full decoupled app: Next.js frontend (React 19, App Rou
 | C31 | **One page, 3 sections**: `/settings/lookups` renders SDWAN/BAA/Role sections from a single reusable list component parameterized by `kind` — no per-table route |
 | C32 | **Create + rename only, no delete** (mirrors V33 + FK `PROTECT`); rename to an existing name → 400 (unique on `name`) surfaced in UI, never silently merged |
 | C37 | **Login lockout is time-based and self-healing** — 3 failed logins lock the username for `AXES_COOLOFF_TIME` (default **30 MINUTES**, env-overridable). Retrying while locked never extends it; the lockout lifts on its own once the window passes. Prod MUST set `AXES_COOLOFF_TIME=30` in the docker **service env** (unit = minutes) — the baked `.env` loses to the service env |
+| C38 | **"CID" is a display label for `MemberLink.capacity`, not a rename** — the Tambah Link editor labels the field **CID** and both link rows prefix the value `CID:`. The DB column, the `verbose_name`, the API key `capacity` (`MemberLinkSerializer.fields`) and the stored values are unchanged, so no migration and no consumer break. `MemberLink` is not a Wagtail snippet, so that `verbose_name` never renders anywhere |
 
 | ID | Ruling | Source |
 |---|---|---|
@@ -184,6 +185,7 @@ Domain-keyed by `Networks.domain` = `urlparse(domain_api).netloc`. Prereq: the `
 
 | V51 | **External/External-Network nav hide is plumbed end to end** — `getCurrentUser()` (`(main)/layout.tsx`) passes `groups` from `/api/auth/me/` into `NavUserInfo`; `visibleItems()` in `app-sidebar.tsx` drops ids `quota`/`networks`/`organizations` when `groups` contains `External` or `External Network`, after the `is_superuser` branch; the three routes redirect to `/dashboard/default` under the same predicate, mirroring the V41 lookups gate. Rule is deny-only, never a grant — a group list never unlocks an item. FE gate is cosmetic: DRF read permissions and org-filtering are unchanged (C36) |
 | V52 | **Axes lockout MUST expire unattended, MUST NOT be extended by retries** — `AXES_COOLOFF_TIME` is an explicit `timedelta` (read as MINUTES; a bare int/float is HOURS to django-axes, so the old `2` silently meant 2 hours); `AXES_RESET_COOL_OFF_ON_FAILURE_DURING_LOCKOUT = False`, so an attempt made while locked — including one carrying the CORRECT password — never rewrites `attempt_time`/`failures_since_start` and never restarts the window. Enforced by `accounts/tests.py::AxesLockoutTest` (C37) |
+| V53 | **Installed-link display labels CID/SID in BOTH render sites** — the link row renders `provider \| CID: <capacity> \| SID: <sid>` with `provider` unprefixed; the `capacity` value carries a `CID:` prefix to match `sid`'s `SID:`. Same expression in the `/sites` grid (`sites-view.tsx::SiteLinks`) and the edit-form installed-link row (`site-edit-form.tsx`). No markup/DB change: API key stays `capacity`, column and `verbose_name` untouched (C38) |
 
 | ID | Status | Task | Cites |
 |---|---|---|---|
@@ -238,6 +240,7 @@ Domain-keyed by `Networks.domain` = `urlparse(domain_api).netloc`. Prereq: the `
 | T36 | x | Backend: new `MemberOptionsViewSet` action (or `@action`) at `/api/members/options/` returning the three option lists from the tables (sdwan/baa/role as string arrays) — feeds FE selects | C25,V31 |
 | T37 | x | FE: drop hard-coded `SDWAN_CHOICES`/`BAA_STATUS_CHOICES` from `data.ts` + `["MAIN","BACKUP","SINGLE"]` from `site-edit-form.tsx` + `SDWAN_CHOICES` use in `create-site-dialog.tsx` (L21/L115); fetch the option lists from `/api/members/options/` and use them for the sdwan/baa/role selects | C25,V31 |
 | T50 | ✅ | Backend: harden Axes lockout — hoist `from datetime import timedelta` to module imports (it was bound *after* the AXES block, so using it there would `NameError`) and drop the old duplicate at the `SIMPLE_JWT` block; `AXES_COOLOFF_TIME = timedelta(minutes=float(os.getenv('AXES_COOLOFF_TIME', 30)))` (explicit unit, 30m default); `AXES_RESET_COOL_OFF_ON_FAILURE_DURING_LOCKOUT = False`; `env.sample` states the unit; regression test `accounts/tests.py::AxesLockoutTest` (explicit unit / retry-while-locked does not extend / lockout expires unattended). Verified: 2 of 3 tests FAIL pre-fix, 66 full-suite OK | C37,V52 |
+| T51 | ✅ | FE: relabel `Capacity`→`CID` in the Tambah Link editor (`site-edit-form.tsx` `FieldLabel` for `link-capacity`) and prefix `CID:` on `capacity` in both link-row render sites (`sites-view.tsx::SiteLinks` + `site-edit-form.tsx`) to match the existing `SID:` prefix. Verified in-browser: form labels no longer contain `Capacity`; grid row renders `Telkom \| CID: 100Mbps \| SID: ABC123`; `tsc --noEmit` + `npm run build` exit 0 | C38,V53 |
 
 ## §B — Bugs
 
