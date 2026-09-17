@@ -14,6 +14,8 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { createSiteLink, deleteSiteFile, deleteSiteLink, fetchLinkServices, fetchMemberOptions, fetchSite, patchSiteLink, uploadSiteFile, type MemberOptions } from "./api";
 import {
+  isExternalViewOnly,
+  isFieldVisible,
   isFieldWritable,
   linkDetail,
   type Me,
@@ -49,7 +51,7 @@ function scalarDefsFor(me: Me, options: MemberOptions): ScalarDef[] {
     { name: "notes", label: "Keterangan", kind: "textarea" },
     { name: "ip_address", label: "IP Address", kind: "text" },
   ];
-  return defs.map((d) => ({ ...d, writable: isFieldWritable(me, d.name) }));
+  return defs.filter((d) => isFieldVisible(me, d.name)).map((d) => ({ ...d, writable: isFieldWritable(me, d.name) }));
 }
 
 // V34-view: all file fields shown; non-writable disabled.
@@ -61,7 +63,7 @@ function fileFieldsFor(me: Me): { field: string; label: string; writable: boolea
     { field: "invoice_file", label: "Upload Bukti Invoice" },
     { field: "bap_file", label: "BAP Dismantle" },
   ];
-  return defs.map((d) => ({ ...d, writable: isFieldWritable(me, d.field) }));
+  return defs.filter((d) => isFieldVisible(me, d.field)).map((d) => ({ ...d, writable: isFieldWritable(me, d.field) }));
 }
 
 
@@ -148,6 +150,10 @@ export function SiteEditForm({
   }
   const services = useLinkServices(me);
   const canEditLinks = isFieldWritable(me, "member_links");
+  // C40/V55: one form serves both edit and read-only; derived from the writable
+  // flags the form already computes, so no new prop and no second code path.
+  const noWritableField = !canEditLinks && !scalarDefs.some((d) => d.writable) && !fileFields.some((f) => f.writable);
+  const hideSid = isExternalViewOnly(me);
   const [newLink, setNewLink] = React.useState<Partial<SiteLink>>({
     role: "MAIN",
     service: null,
@@ -203,16 +209,18 @@ export function SiteEditForm({
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Badge variant="outline">EDIT MODE ACTIVE</Badge>
+          <Badge variant="outline">{noWritableField ? "READ ONLY" : "EDIT MODE ACTIVE"}</Badge>
           <span className="font-medium">{row.name}</span>
         </div>
         <div className="flex gap-2">
           <Button variant="ghost" size="sm" onClick={onDone}>
-            <X className="size-4" /> Batal
+            <X className="size-4" /> {noWritableField ? "Tutup" : "Batal"}
           </Button>
-          <Button size="sm" onClick={submit} disabled={!dirty.length}>
-            <Pencil className="size-4" /> Simpan
-          </Button>
+          {!noWritableField && (
+            <Button size="sm" onClick={submit} disabled={!dirty.length}>
+              <Pencil className="size-4" /> Simpan
+            </Button>
+          )}
         </div>
       </div>
 
@@ -310,7 +318,7 @@ export function SiteEditForm({
           </>
         );
       })()}
-      {canEditLinks && row.member_links.length > 0 && (
+      {row.member_links.length > 0 && (
         <div className="flex flex-col gap-2">
           <div className="text-muted-foreground flex items-center gap-2 text-xs font-medium">
             <Link2 className="size-3.5" /> LINK TERPASANG
@@ -322,16 +330,18 @@ export function SiteEditForm({
                   LINK {l.role} {l.service ? `- ${serviceName(services, l.service)}` : ""}
                 </span>
                 <div className="text-muted-foreground text-xs">
-                  {linkDetail(l)}
+                  {linkDetail(l, hideSid)}
                 </div>
-                <button
-                  type="button"
-                  className="text-destructive hover:text-destructive/70"
-                  onClick={() => onLinkDelete(l.id)}
-                  title="Hapus link"
-                >
-                  <Trash2 className="size-4" />
-                </button>
+                {canEditLinks && (
+                  <button
+                    type="button"
+                    className="text-destructive hover:text-destructive/70"
+                    onClick={() => onLinkDelete(l.id)}
+                    title="Hapus link"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -433,34 +443,35 @@ export function SiteEditForm({
             );
           })()}
           {/* Upload buttons */}
-          <div className="flex flex-col gap-1">
-            <div className="text-muted-foreground flex items-center gap-2 text-xs font-medium">
-              <Upload className="size-3.5" /> UNGGAH DOKUMEN
-            </div>
-            <div className="flex flex-wrap gap-3">
-              {fileFields.map((f) => {
-                const val = (row as unknown as Record<string, string | null>)[f.field];
-                const hasFile = !!val;
-                const fileName = hasFile ? val!.split("/").pop() : null;
-                const fileUrl = hasFile ? `/api/media/${val}` : null;
-                return f.writable ? (
-                  <label key={f.field} className={`flex flex-col gap-0.5 rounded-md border border-dashed border-muted-foreground/40 bg-muted/40 px-3 py-1.5 cursor-pointer hover:border-primary/60 hover:bg-muted/70 transition-colors`}>
-                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">{f.label}</span>
-                    <div className="flex items-center gap-1.5">
-                      <Upload className="size-3.5 text-muted-foreground" />
-                      <span className="text-muted-foreground text-xs">{hasFile ? `Ganti ${fileName}` : "Pilih file"}</span>
+          {fileFields.some((f) => f.writable) && (
+            <div className="flex flex-col gap-1">
+              <div className="text-muted-foreground flex items-center gap-2 text-xs font-medium">
+                <Upload className="size-3.5" /> UNGGAH DOKUMEN
+              </div>
+              <div className="flex flex-wrap gap-3">
+                {fileFields.map((f) => {
+                  const val = (row as unknown as Record<string, string | null>)[f.field];
+                  const hasFile = !!val;
+                  const fileName = hasFile ? val!.split("/").pop() : null;
+                  return f.writable ? (
+                    <label key={f.field} className={`flex flex-col gap-0.5 rounded-md border border-dashed border-muted-foreground/40 bg-muted/40 px-3 py-1.5 cursor-pointer hover:border-primary/60 hover:bg-muted/70 transition-colors`}>
+                      <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">{f.label}</span>
+                      <div className="flex items-center gap-1.5">
+                        <Upload className="size-3.5 text-muted-foreground" />
+                        <span className="text-muted-foreground text-xs">{hasFile ? `Ganti ${fileName}` : "Pilih file"}</span>
+                      </div>
+                      <input type="file" className="hidden" onChange={(e) => onFile(f.field, e.target.files?.[0])} />
+                    </label>
+                  ) : (
+                    <div key={f.field} className="flex flex-col gap-0.5 rounded-md border border-border bg-muted/40 px-3 py-1.5 opacity-50">
+                      <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">{f.label}</span>
+                      <span className="text-muted-foreground text-xs">{hasFile ? fileName : "Tidak dapat diubah"}</span>
                     </div>
-                    <input type="file" className="hidden" onChange={(e) => onFile(f.field, e.target.files?.[0])} />
-                  </label>
-                ) : (
-                  <div key={f.field} className="flex flex-col gap-0.5 rounded-md border border-border bg-muted/40 px-3 py-1.5 opacity-50">
-                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">{f.label}</span>
-                    <span className="text-muted-foreground text-xs">{hasFile ? fileName : "Tidak dapat diubah"}</span>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
     </div>

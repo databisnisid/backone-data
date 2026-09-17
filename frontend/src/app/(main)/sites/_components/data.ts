@@ -133,3 +133,13 @@ export function writableFieldSet(me: Me): Set<string> {
 export function isFieldWritable(me: Me, field: string): boolean {
   return writableFieldSet(me).has(field);
 }
+
+// C40/V55: the read-only site expansion drops the fields the reduced grid (C39)
+// hides for External/External Network. Every other role renders exactly as before.
+// ponytail: this list mirrors the C39 column set by hand; derive it from
+// members/rbac.py readable_fields() if a role ever needs a partial feature read.
+const EXTERNAL_HIDDEN_FIELDS = new Set(["po_file_user","po_file_vendor","invoice_number","invoice_file","bap_file","notes"]);
+
+export function isFieldVisible(me: Me, field: string): boolean {
+  return !(isExternalViewOnly(me) && EXTERNAL_HIDDEN_FIELDS.has(field));
+}

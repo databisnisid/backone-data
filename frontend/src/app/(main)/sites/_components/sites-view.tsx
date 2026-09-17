@@ -135,13 +135,14 @@ function Cols({ me, cols, row, onEdit }: { me: Me; cols: ColVisibility; row: Sit
         </TableCell>
       )}
       <TableCell>
-        {editable ? (
-          <Button variant="outline" size="sm" onClick={() => onEdit(row.id)}>
-            Ubah
-          </Button>
-        ) : (
-          <span className="text-muted-foreground text-xs">View</span>
-        )}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onEdit(row.id)}
+          title={editable ? "Ubah situs" : "Lihat detail situs (read-only)"}
+        >
+          {editable ? "Ubah" : "View"}
+        </Button>
       </TableCell>
     </>
   );
