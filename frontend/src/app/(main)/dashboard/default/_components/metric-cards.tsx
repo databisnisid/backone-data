@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { Globe, HardDrive, Wifi, WifiOff } from "lucide-react";
+import { ChevronDown, Globe, HardDrive, Wifi, WifiOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Cell, Pie, PieChart } from "recharts";
 import { toast } from "sonner";
@@ -10,13 +10,16 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 type Stats = {
   total_sites: number;
   online_sites: number;
   offline_sites: number;
   manual_sites: number;
-  top_networks: Array<{ name: string; sites: number }>;
+  // C60/V63: every network holding >=1 site (never a zero-site one), each
+  // carrying its id so a row can drill into /sites?network=<id>.
+  top_networks: Array<{ id: number; name: string; sites: number }>;
   // T57/C51: provider rows are DISTINCT-site counts; "Tanpa Link" is the
   // full-role-set complement, so it partitions `total_sites` exactly.
   provider_breakdown: Array<{ provider: string; count: number }>;
@@ -117,14 +120,52 @@ export function MetricCards() {
   );
 }
 
+// C60: 10 rows on load; the rest hide behind the trigger below.
+const TOP_NETWORKS_VISIBLE = 10;
+
 export function TopNetworks() {
   const [stats, setStats] = useState<Stats | null>(null);
+  const [open, setOpen] = useState(false);
+  const router = useRouter();
 
   useState(() => {
     void fetchStats()
       .then(setStats)
       .catch((e) => toast.error((e as Error).message));
   });
+
+  const nets = stats?.top_networks ?? [];
+  const hidden = nets.slice(TOP_NETWORKS_VISIBLE);
+
+  const row = (n: Stats["top_networks"][number]) => {
+    // V63: bars are shares of the TOTAL site count, so a sub-1% network would
+    // paint a zero-width bar and read "(0%)" — 7 of prod's 21 rows do. Keep the
+    // label honest and floor only the bar.
+    const exact = stats?.total_sites ? (n.sites / stats.total_sites) * 100 : 0;
+    const rounded = Math.round(exact);
+    const label = rounded === 0 && exact > 0 ? "<1" : String(rounded);
+    return (
+      <button
+        key={n.id}
+        type="button"
+        onClick={() => router.push(`/sites?network=${n.id}`)}
+        className="block w-full space-y-1 text-left"
+      >
+        <div className="flex items-center justify-between gap-2 text-sm">
+          <span className="truncate font-medium hover:underline">{n.name}</span>
+          <span className="text-muted-foreground shrink-0 tabular-nums">
+            {n.sites.toLocaleString("id-ID")} ({label}%)
+          </span>
+        </div>
+        <div className="bg-muted h-2 w-full overflow-hidden rounded-full">
+          <div
+            className="bg-primary h-full rounded-full"
+            style={{ width: `${label === "<1" ? 1 : rounded}%` }}
+          />
+        </div>
+      </button>
+    );
+  };
 
   return (
     <Card>
@@ -137,22 +178,29 @@ export function TopNetworks() {
         {stats?.top_networks.length === 0 && (
           <p className="text-muted-foreground text-sm">Tidak ada data jaringan.</p>
         )}
-        {stats?.top_networks.map((n) => {
-          const pct = stats.total_sites ? Math.round((n.sites / stats.total_sites) * 100) : 0;
-          return (
-            <div key={n.name} className="space-y-1">
-              <div className="flex items-center justify-between gap-2 text-sm">
-                <span className="truncate font-medium">{n.name}</span>
-                <span className="text-muted-foreground tabular-nums">
-                  {n.sites.toLocaleString("id-ID")} ({pct}%)
-                </span>
-              </div>
-              <div className="bg-muted h-2 w-full overflow-hidden rounded-full">
-                <div className="bg-primary h-full rounded-full" style={{ width: `${pct}%` }} />
-              </div>
-            </div>
-          );
-        })}
+        {stats && (
+          // C60: the trigger count comes from the array, never a literal — an
+          // org-scoped viewer sees fewer than the superuser's 21.
+          <Collapsible open={open} onOpenChange={setOpen} className="space-y-3">
+            {nets.slice(0, TOP_NETWORKS_VISIBLE).map(row)}
+            {hidden.length > 0 && (
+              <>
+                <CollapsibleContent className="space-y-3">
+                  {hidden.map(row)}
+                </CollapsibleContent>
+                <CollapsibleTrigger className="text-muted-foreground hover:text-foreground flex w-full items-center justify-center gap-1 text-sm font-medium">
+                  {open
+                    ? "Tampilkan lebih sedikit"
+                    : `${hidden.length} jaringan lainnya`}
+                  <ChevronDown
+                    aria-hidden
+                    className={`size-4 transition-transform ${open ? "rotate-180" : ""}`}
+                  />
+                </CollapsibleTrigger>
+              </>
+            )}
+          </Collapsible>
+        )}
         {stats && (
           <Badge variant="secondary" className="mt-2">
             {stats.total_sites.toLocaleString("id-ID")} situs total

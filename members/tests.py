@@ -906,3 +906,81 @@ class SdwanBreakdownTest(TestCase):
             Members.objects.get(member_id="L1").sdwan_package.name,
             "BackOne - Tanpa SDWAN",
         )
+
+
+class TopNetworksTest(TestCase):
+    """T63: the dashboard `Top Networks` card lists EVERY site-bearing network.
+
+    Cites C60,V63. The card caps its rendering at 10 rows behind a collapsible
+    trigger, but the payload must carry all of them — the FE cannot reveal what
+    the API truncated.
+    """
+
+    def setUp(self):
+        from rest_framework.test import APIClient
+
+        self.api = APIClient()
+        self.org = Organizations.objects.create(name="OrgTN")
+
+        # 12 networks in this org each holding one site — more than the 10 the
+        # card renders inline, so a surviving [:10] slice is observable.
+        self.nets = []
+        for i in range(12):
+            net = Networks.objects.create(name=f"Net{i:02d}", network_id=f"N{i:02d}")
+            self.org.networks.add(net)
+            Members.objects.create(name=f"Site{i:02d}", member_id=f"S{i:02d}", network=net)
+            self.nets.append(net)
+
+        # A network with zero sites must stay out: the card ranks by share of
+        # `total_sites`, so a 0-site row could only ever render `0 (0%)`.
+        self.empty_net = Networks.objects.create(name="NetEmpty", network_id="NE")
+        self.org.networks.add(self.empty_net)
+
+        # Another org's network must not leak in (C48).
+        other_net = Networks.objects.create(name="NetForeign", network_id="NF")
+        other_org = Organizations.objects.create(name="OrgTNForeign")
+        other_org.networks.add(other_net)
+        Members.objects.create(name="Foreign", member_id="F1", network=other_net)
+
+        self.user = User.objects.create_user(
+            username="topnets", password="pass1234", organization=self.org
+        )
+        self.api.force_authenticate(self.user)
+
+    def _stats(self):
+        r = self.api.get("/api/members/sites/stats/")
+        self.assertEqual(r.status_code, 200)
+        return r.json()
+
+    def test_payload_carries_every_network_not_just_ten(self):
+        rows = self._stats()["top_networks"]
+        self.assertEqual(len(rows), 12)
+        self.assertEqual({r["name"] for r in rows}, {n.name for n in self.nets})
+
+    def test_rows_carry_the_network_id_for_the_drill_down(self):
+        rows = self._stats()["top_networks"]
+        self.assertEqual(
+            {r["id"] for r in rows},
+            {n.pk for n in self.nets},
+        )
+
+    def test_rows_partition_total_sites(self):
+        stats = self._stats()
+        self.assertEqual(sum(r["sites"] for r in stats["top_networks"]), stats["total_sites"])
+
+    def test_zero_site_network_excluded(self):
+        names = {r["name"] for r in self._stats()["top_networks"]}
+        self.assertNotIn("NetEmpty", names)
+
+    def test_other_org_network_excluded(self):
+        names = {r["name"] for r in self._stats()["top_networks"]}
+        self.assertNotIn("NetForeign", names)
+
+    def test_row_count_equals_the_grid_it_links_to(self):
+        # V63: a row and `/sites?network=<id>` must report the same number. The
+        # link carries no `status`, because the card spans the FULL role set
+        # (unlike the active-only pie slices of V62).
+        for row in self._stats()["top_networks"]:
+            r = self.api.get("/api/members/sites/", {"network": row["id"]})
+            self.assertEqual(r.status_code, 200)
+            self.assertEqual(r.json()["count"], row["sites"], row["name"])

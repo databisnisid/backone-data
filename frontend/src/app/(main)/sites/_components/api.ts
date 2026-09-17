@@ -18,6 +18,8 @@ export async function fetchSites(params: {
   // V62: slice links carry these, so the grid's count matches the pie slice.
   sdwan?: string;
   status?: string;
+  // V63: a `Top Networks` row carries the network id, never a status.
+  networks?: string[];
 }) {
   const q = new URLSearchParams();
   q.set("page", String(params.page));
@@ -25,6 +27,7 @@ export async function fetchSites(params: {
   for (const p of params.providers ?? []) q.append("provider", p);
   if (params.sdwan) q.set("sdwan", params.sdwan);
   if (params.status) q.set("status", params.status);
+  for (const n of params.networks ?? []) q.append("network", n);
   const res = await fetch(`/api/backend/members/sites?${q.toString()}`);
   return jsonOrThrow<Page<SiteRow>>(res);
 }

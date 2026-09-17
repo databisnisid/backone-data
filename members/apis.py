@@ -268,11 +268,15 @@ class SitesViewSet(viewsets.ModelViewSet):
         online = active_members_queryset(qs).count()
         offline = total - online
         manual = qs.filter(is_manual=True).count()
+        # C60/V63: every network holding >=1 site, no [:10] slice — the card
+        # shows 10 and hides the rest behind a collapsible trigger. A network
+        # with zero sites stays out (the card is a ranking over total_sites,
+        # a site count), so the payload sums to `total` exactly.
         nets = (
             qs.exclude(network__isnull=True)
-            .values("network__name")
+            .values("network_id", "network__name")
             .annotate(count=Count("id"))
-            .order_by("-count")[:10]
+            .order_by("-count")
         )
         groups = (
             qs.exclude(network__network_group__isnull=True)
@@ -292,7 +296,12 @@ class SitesViewSet(viewsets.ModelViewSet):
                 "offline_sites": offline,
                 "manual_sites": manual,
                 "top_networks": [
-                    {"name": n["network__name"], "sites": n["count"]} for n in nets
+                    {
+                        "id": n["network_id"],
+                        "name": n["network__name"],
+                        "sites": n["count"],
+                    }
+                    for n in nets
                 ],
                 "group_aggregates": [
                     {

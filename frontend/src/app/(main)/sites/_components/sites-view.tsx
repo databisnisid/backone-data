@@ -186,6 +186,9 @@ export function SitesView() {
   const searchParams = useSearchParams();
   const [sdwan] = React.useState(() => searchParams.get("sdwan") ?? "");
   const [status] = React.useState(() => searchParams.get("status") ?? "");
+  // V63: `Top Networks` rows land here as `/sites?network=<id>` — repeatable,
+  // like the `?network=` site picker (V34). Seeded once, never written back.
+  const [networks] = React.useState(() => searchParams.getAll("network"));
   const [providerOptions, setProviderOptions] = React.useState<string[]>([]);
   const [editingId, setEditingId] = React.useState<number | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -206,7 +209,7 @@ export function SitesView() {
   const load = React.useCallback(async () => {
     setLoading(true);
     try {
-      const data = await fetchSites({ page, search, providers, sdwan, status });
+      const data = await fetchSites({ page, search, providers, sdwan, status, networks });
       setRows(data.results);
       setTotal(data.count);
     } catch (e) {
@@ -214,7 +217,7 @@ export function SitesView() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, providers, sdwan, status]);
+  }, [page, search, providers, sdwan, status, networks]);
 
   React.useEffect(() => {
     void load();

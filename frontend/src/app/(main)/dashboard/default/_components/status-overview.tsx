@@ -12,7 +12,7 @@ type Stats = {
   online_sites: number;
   offline_sites: number;
   manual_sites: number;
-  top_networks: Array<{ name: string; sites: number }>;
+  top_networks: Array<{ id: number; name: string; sites: number }>;
   group_aggregates?: Array<{
     network_group: string;
     total_sites: number;
