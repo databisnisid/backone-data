@@ -74,21 +74,41 @@ export type ColKey = "situs" | "layanan" | "timeline" | "baa" | "po" | "invoice"
 
 export type ColVisibility = Record<ColKey, boolean>;
 
-export function visibleColumns(me: Me): ColVisibility {
-  const support = isSupport(me);
-  const sales = isSales(me);
-  const finance = isFinance(me);
+// V34-view: all 5 groups see the same columns. No role-based column hiding.
+export function visibleColumns(_me: Me): ColVisibility {
   return {
     situs: true,
-    layanan: support || sales || finance,
+    layanan: true,
     timeline: true,
-    // BAA col: BAA cat+file — shown to Support/Sales. Finance does not get it.
-    baa: support || sales,
-    po: support || finance,
-    // Invoice col isolated to Finance + Support/superuser admin.
-    invoice: support || finance,
-    // BAP file visible only to ops (server masks bap_file otherwise).
-    dismantle: support,
+    baa: true,
+    po: true,
+    invoice: true,
+    dismantle: true,
     keterangan: true,
   };
+}
+
+// V34-view: writable fields per role (mirrors members/rbac.py WRITE_BY_ROLE).
+const WRITE_BY_ROLE: Record<string, Set<string>> = {
+  Superuser: new Set(["name","member_id","address","location","online_at","offline_at","service_line","network","links","quota_string","upload_baa","invoice_number","invoice_file","po_file_user","po_file_vendor","bap_file","ip_address","sdwan_package","project_number","baa_status_category","notes","member_code","member_links"]),
+  Support: new Set(["ip_address","member_links"]),
+  Sales: new Set(["baa_status_category","upload_baa","notes","member_links","member_code","sdwan_package","po_file_user"]),
+  Purchasing: new Set(["po_file_vendor","project_number"]),
+  Finance: new Set(["invoice_number","invoice_file","notes"]),
+};
+
+export function writableFieldSet(me: Me): Set<string> {
+  const roles: string[] = [];
+  if (me.is_superuser) roles.push("Superuser");
+  roles.push(...me.groups);
+  const out = new Set<string>();
+  for (const r of roles) {
+    const w = WRITE_BY_ROLE[r];
+    if (w) for (const f of w) out.add(f);
+  }
+  return out;
+}
+
+export function isFieldWritable(me: Me, field: string): boolean {
+  return writableFieldSet(me).has(field);
 }

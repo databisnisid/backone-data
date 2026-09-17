@@ -126,11 +126,7 @@ class MembersViewSet(SnippetViewSet):
         return list_display
 
     def get_queryset(self, request):
-        if (
-            request.user.is_superuser
-            or request.user.groups.filter(name='External').exists()
-            or request.user.groups.filter(name='External Network').exists()
-        ):
+        if request.user.is_superuser:
             return Members.objects.all()
         else:
             try:

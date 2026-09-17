@@ -228,6 +228,85 @@ class OrgFilteringTest(TestCase):
         self.assertEqual(len(data), 1)
 
 
+@override_settings(AUTHENTICATION_BACKENDS=['django.contrib.auth.backends.ModelBackend'])
+class ExternalOrgScopeTest(TestCase):
+    """Regression: `External Network`/`External` must be org-scoped, not all-rows.
+    They were previously in the all-rows predicate, leaking every org's sites and
+    networks. Cites SPEC §I RBAC map."""
+
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        from rest_framework.test import APIClient
+
+        g = Group.objects.get_or_create(name="External Network")[0]
+
+        self.net_a = Networks.objects.create(name="NetA", network_id="NA")
+        self.net_b = Networks.objects.create(name="NetB", network_id="NB")
+        self.org_a = Organizations.objects.create(name="OrgA")
+        self.org_a.networks.add(self.net_a)
+        self.org_b = Organizations.objects.create(name="OrgB")
+        self.org_b.networks.add(self.net_b)
+
+        self.mine = Members.objects.create(
+            name="Mine", member_id="MA", network=self.net_a
+        )
+        self.theirs = Members.objects.create(
+            name="Theirs", member_id="MB", network=self.net_b
+        )
+
+        self.user = User.objects.create_user(
+            username="ext", password="pass1234", organization=self.org_a
+        )
+        self.user.groups.add(g)
+        self.other = User.objects.create_user(
+            username="other", password="pass1234", organization=self.org_b
+        )
+
+        from django.test import Client
+
+        self.api = APIClient()
+        self.api.force_authenticate(self.user)
+        self.sess = Client()
+        self.sess.force_login(self.user)
+
+    def test_predicate_denies_external_network(self):
+        from .rbac import sees_all_sites
+        self.assertFalse(sees_all_sites(self.user))
+
+    def test_sites_list_org_scoped(self):
+        r = self.api.get("/api/members/sites/")
+        self.assertEqual(r.status_code, 200)
+        ids = {row["member_id"] for row in r.json()["results"]}
+        self.assertEqual(ids, {"MA"})
+
+    def test_networks_list_org_scoped(self):
+        r = self.api.get("/api/networks/")
+        self.assertEqual(r.status_code, 200)
+        names = {row["name"] for row in r.json()["results"]}
+        self.assertEqual(names, {"NetA"})
+
+    def test_legacy_feed_ignores_url_user_id(self):
+        # Was an IDOR: passing other's id returned other's sites.
+        r = self.sess.get(f"/api/members/get_by_user/{self.other.id}/")
+        self.assertEqual(r.status_code, 200)
+        ids = {row["member_id"] for row in r.json()}
+        self.assertEqual(ids, {"MA"})
+
+    def test_group_member_sites_detail_org_scoped(self):
+        # Groups are a global taxonomy, but member_sites_detail leaked every
+        # org's site NAMES to any authed reader.
+        from networks.models import NetworksGroup
+        g = NetworksGroup.objects.create(name="G")
+        g.member_sites.add(self.mine, self.theirs)
+        r = self.api.get("/api/networks/groups/")
+        self.assertEqual(r.status_code, 200)
+        rows = r.json()["results"] if isinstance(r.json(), dict) else r.json()
+        gid = next(row for row in rows if row["id"] == g.id)
+        names = {m["name"] for m in gid["member_sites_detail"]}
+        self.assertEqual(names, {"Mine"})
+        self.assertEqual(gid["sites"], 1)
+
+
 class LookupApiTest(TestCase):
     """T38/T41: superuser-only lookup CRUD. Cites V37,V38,V39,V43,V44."""
 

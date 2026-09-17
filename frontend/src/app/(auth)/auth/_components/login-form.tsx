@@ -45,6 +45,7 @@ export function LoginForm() {
         body: JSON.stringify({
           username: data.username,
           password: data.password,
+          remember: data.remember ?? false,
         }),
       });
       const body = await res.json();

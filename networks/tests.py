@@ -41,8 +41,10 @@ class GetNetworksTest(TestCase):
 
     @patch('networks.utils.requests.get')
     def test_deletes_networks_not_in_response(self, mock_get):
-        Networks.objects.create(name='Keep', network_id='NET1')
-        Networks.objects.create(name='Delete', network_id='NET2')
+        # Rows carry the domain of the upstream that owns them, as a real sync
+        # leaves them.
+        Networks.objects.create(name='Keep', network_id='NET1', domain='api.test')
+        Networks.objects.create(name='Delete', network_id='NET2', domain='api.test')
 
         mock_resp = MagicMock()
         mock_resp.json.return_value = [
@@ -55,6 +57,36 @@ class GetNetworksTest(TestCase):
         self.assertEqual(Networks.objects.count(), 1)
         self.assertTrue(Networks.objects.filter(network_id='NET1').exists())
         self.assertFalse(Networks.objects.filter(network_id='NET2').exists())
+
+    @patch('networks.utils.requests.get')
+    def test_sync_of_one_domain_never_deletes_another_domains_networks(self, mock_get):
+        """A second upstream's sync must leave the first domain's rows intact.
+
+        Network ids are per-instance-opaque, so every id a domain sees is
+        'absent' from the other domain's API response. Cites V2, V3.
+        """
+        backone = Networks.objects.create(
+            name='Backone Net', network_id='BC1', domain='manage.backone.cloud'
+        )
+        from members.models import Members
+
+        member = Members.objects.create(
+            name='Backone Site', member_id='BCM1', network=backone, is_manual=False
+        )
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = [
+            {'fields': {'name': 'VN Net', 'description': '', 'network_id': 'VN1'}},
+        ]
+        mock_get.return_value = mock_resp
+
+        get_networks('https://manage.vn.backone.cloud')
+
+        self.assertTrue(Networks.objects.filter(network_id='BC1').exists())
+        self.assertEqual(Networks.objects.get(network_id='BC1').domain, 'manage.backone.cloud')
+        self.assertTrue(Members.objects.filter(member_id='BCM1').exists())
+        self.assertEqual(member.network_id, backone.pk)
+        self.assertTrue(Networks.objects.filter(network_id='VN1', domain='manage.vn.backone.cloud').exists())
 
     @patch('networks.utils.requests.get')
     def test_api_failure_does_not_delete(self, mock_get):

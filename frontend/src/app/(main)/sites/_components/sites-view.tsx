@@ -36,7 +36,7 @@ import { SiteEditForm } from "./site-edit-form";
 function fileHref(u: string | null) {
   if (!u) return null;
   if (u.startsWith("http")) return u;
-  return `/api/backend/members/sites/${u}`;
+  return `/api/media/${u}`;
 }
 
 function fileName(u: string | null) {
@@ -321,7 +321,7 @@ export function SitesView() {
             </Button>
           )}
           <Button variant="outline" asChild>
-            <a href="/api/backend/members/sites/export.xlsx">
+            <a href="/api/backend/members/sites/export">
               <Download className="size-4" /> Download XLSX
             </a>
           </Button>

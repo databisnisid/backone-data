@@ -22,13 +22,16 @@ Rework BackOne Data into full decoupled app: Next.js frontend (React 19, App Rou
 | C12 | Uploads (BAA download for sync sites / upload for Finance-Sales / PO user / PO vendor / bukti invoice / BAP) stored in Django MEDIA, served/proxied via BFF |
 | C13 | Row scale: **server-paginated** (100/page), server filter + sort + total count, server-side XLSX export. No client virtualization/AG Grid |
 | C14 | RBAC retains Django Groups (Sales, Finance, Purchasing, Support, External/External Network) + org-filtering; enforced server-side in DRF, mirrored as column visibility in FE |
-| C15 | Sync untouched for now (data-source authority): `config/workers.sync_data` + `dockerize/cronjobs` hourly unchanged |
+| C15 | Sync IS multi-domain: `config/workers.sync_data(domain_api)` runs once per upstream instance via `dockerize/cronjobs` (backone + vn lines). `get_networks` scopes its delete to rows owned by the syncing domain |
 | C16 | SQLite dev / MySQL prod (existing) |
 | C17 | `id-id` locale, `Asia/Jakarta` TZ |
 | C18 | No CI/CD, no linter/typecheck config added (repo convention) |
 | C19 | `SECRET_KEY` read from env (`os.getenv('SECRET_KEY')`, dev fallback only); JWT signed with this key — production MUST set real `SECRET_KEY` before `/api/sites/` protected endpoints deploy |
 
-| C20 | **Purchasing** Django Group added (prod id=11, created) — writable ONLY `po_file_vendor`. Not in org-filter (`_is_authorized_all` unchanged: Support/External inherit all rows) |
+| C20 | **Purchasing** Django Group added (prod id=11, created) — writable ONLY `po_file_vendor`. Superseded by C34 (adds `project_number`) |
+| C33 | **Edit form field visibility** — `service_line`, `location`, `quota_string` hidden in site edit form (read-only data, no edit needed); `network` kept but shows `network_name` (read-only, always disabled); `invoice_number` scalar field added for Finance role; all fields disabled (read-only) for non-writable roles |
+| C34 | **Purchasing write scope expanded** — `project_number` added to Purchasing writable set alongside `po_file_vendor`; Purchasing can edit PO vendor + project number |
+| C35 | **Support write scope narrowed** — Support restricted to `ip_address` + `member_links` only; removed: `sdwan_package`, `baa_status_category`, `upload_baa`, `invoice_number`, `invoice_file`, `po_file_user`, `po_file_vendor`, `bap_file`, `member_code`, `notes` |
 | C21 | **Dismantle = derived view** of `Members.offline_at != null` — no new column/status, no migration, no drift (Q3/Q7) |
 | C22 | Dashboard aggregates ship **per `network_group`** (NetworksGroup): BAA = `upload_baa` non-null; Invoice = `invoice_number` non-null (Q7). Top Networks retained, dismantle count folds into Online/Offline cards |
 | C23 | **File upload cap 10MB / PDF,XLS,XLSX,DOC,DOCX** (existing `MAX_UPLOAD_SIZE`+`ALLOWED_UPLOAD_EXT`, already enforced in `MemberFileSerializer`) — reused, not re-added |
@@ -103,15 +106,22 @@ Keep `networks`, `networks_group`, `links`, `organizations`, `auth_user`, Django
 | Role / Group | Sites grid | Edit | Files upload | Export | Notes |
 |---|---|---|---|---|---|
 | Superuser | all | all (manual+synced core) | all | yes | full |
-| Support | all (unmasked cols) | manual full + synced core/timeline | BAA/PO/BAP | yes | creates manual sites |
-| Sales | org | synced: `po_file_user`, `member_links`, `baa_status_category`, notes | PO user | yes | write-on-synced (C8) |
-| Purchasing | org | synced: `po_file_vendor` | PO vendor | yes | new group (C20) |
-| Finance | org | synced: `invoice_number`, `invoice_file`, notes | invoice file | yes | isolated |
+| Support | all (unmasked cols) | manual: `ip_address`, `member_links` | BAA download | yes | creates manual sites |
+| Sales | org | `member_code`, `sdwan_package`, `baa_status_category`, `member_links`, `upload_baa`, `po_file_user` | PO user, BAA | yes | write-on-synced (C8) |
+| Finance | org | `invoice_number`, `invoice_file` | invoice file | yes | isolated |
+| Purchasing | org | `po_file_vendor`, `project_number` | PO vendor | yes | new group (C20) |
 | External / External Network | org (already visible) | no | BAA download | no | read-only map + sites |
 
 ### Cron
 
-Unchanged: `0 * * * * python /app/manage.py shell --command "from config.workers import sync_data; sync_data('https://manage.backone.cloud')"` (`dockerize/cronjobs`).
+Two lines, one per upstream instance (`dockerize/cronjobs`), both baked into the image at `/etc/crontabs/root`:
+
+```
+0 * * * * python /app/manage.py shell --command "from config.workers import sync_data; sync_data('https://manage.backone.cloud')"
+0 * * * * python /app/manage.py shell --command "from config.workers import sync_data; sync_data('https://manage.vn.backone.cloud')"
+```
+
+Domain-keyed by `Networks.domain` = `urlparse(domain_api).netloc`. Prereq: the `backone-data-crond` service MUST NOT mount the `backone-data-app` volume over `/app` — that volume shadowed `/app` with 2025-10-27 code, so cron silently ran pre-fix sync until the mount was removed (`docker service update --mount-rm /app backone-data-crond`).
 
 ## §V — Invariants
 
@@ -138,7 +148,7 @@ Unchanged: `0 * * * * python /app/manage.py shell --command "from config.workers
 | V19 | Manual-site creation default: `is_manual=True`; cannot be converted to synced |
 | V20 | **Synced-site write gate**: `MemberSerializer.update()` + `MemberFileSerializer.update()` relax the `is_manual` guard to check each proposed field — allow feature field if in role's `writable_fields`, deny CORE/identity fields on synced. No blanket synced-write (V5). `member_code` is a feature field (in `FEATURE_FIELDS`), so it passes the synced gate once a role holds it in `writable_fields` |
 | V22 | **Dismantle derived**: dismantle set = `Members.offline_at IS NOT NULL`. No `status`/`dismantle_at` column. Count = filter, not stored |
-| V23 | **Purchasing RBAC**: `WRITE_BY_ROLE["Purchasing"] = {"po_file_vendor"}` + `READ_EXTRA_BY_ROLE` includes it. Org-filtered like Sales/Finance (`_is_authorized_all` unchanged — not in the Support/External all-rows set) |
+| V23 | **Purchasing RBAC (superseded by C34/V47)**: Original `WRITE_BY_ROLE["Purchasing"] = {"po_file_vendor"}` now expanded to `{"po_file_vendor", "project_number"}` per grill (C34). `READ_EXTRA_BY_ROLE` includes both. Org-filtered like Sales/Finance (`_is_authorized_all` unchanged — not in Support/External all-rows set) |
 | V24 | **Nested MemberLink write path**: `member_links` is a writable nested serializer, not `read_only=True`; create/update/delete of links flows through DRF + `save_child_instances` on `Members.save()` — never a raw modelcluster bypass that skips a role/field check. Sales may write links on synced + manual; other roles link read-only |
 | V25 | **Dismantled-site visibility**: `offline_at <= now` (dismantled) sites remain READ + summarizable for role-filtered users (Sales/Finance/Purchasing) — allows PO/invoice fill on dismantled sites and correct per-group dismantle counts. Only the default "active sites" list filters them out; aggregates + detail must not double-filter (BLOCK-2 fix) |
 
@@ -162,6 +172,12 @@ Unchanged: `0 * * * * python /app/manage.py shell --command "from config.workers
 | V34 | Migration `members.0012` is data-safe: seed rows, backfill existing strings→rows (prod has `BackOne - SDWAN Pro`, `New Link`, `BACKUP` only), then `CharField`→FK. No data loss, no orphan FKs (C27) |
 | V35 | **Export + sites-list read emit the lookup name string** — `apis.py` XLSX export rows and the sites-list read-builder must emit `m.sdwan_package.name` / `m.baa_status_category.name` (or empty) — the cells/cards render the value, not `<SdwanPackage: ...>` (guards the `sites-view.tsx` Badge + export cell) |
 | V36 | **`MemberLink.__str__` emits the role name** — `models.py` `__str__` `"%s" % self.role` on an FK renders `<LinkRole: MAIN>`; the serializer read path + `__str__` must emit `self.role.name` (or empty) so Wagtail and link rows show `MAIN`/`BACKUP`/`SINGLE` |
+| V45 | **Edit form hidden/display fields** — `service_line`, `location`, `quota_string` not rendered in site edit form (C33). `network` kept as read-only disabled field displaying `network_name` via `ScalarDef.displayFor` (not raw PK). `invoice_number` added for Finance |
+| V46 | **Support write scope** (C35): `WRITE_BY_ROLE["Support"] = {"ip_address", "member_links"}` on both backend `members/rbac.py` and frontend `data.ts` WRITE_BY_ROLE. Support can add IP + links on manual sites only. Removed from Support: `sdwan_package`, `baa_status_category`, `upload_baa`, `invoice_number`, `invoice_file`, `po_file_user`, `po_file_vendor`, `bap_file`, `member_code`, `notes` |
+| V47 | **Purchasing write scope** (C34): `WRITE_BY_ROLE["Purchasing"] = {"po_file_vendor", "project_number"}` on both backend `members/rbac.py` and frontend `data.ts`. Purchasing can edit PO vendor + project number |
+| V48 | **Sales write scope** (C8): `WRITE_BY_ROLE["Sales"] = {"baa_status_category", "upload_baa", "notes", "member_links", "member_code", "sdwan_package", "po_file_user"}` on both backend `members/rbac.py` and frontend `data.ts`. Sales can edit SDWAN package, BAA status, PO user, links, Kode Situs, BAA upload, and notes |
+| V49 | **Sync deletion is domain-scoped** — `Networks.domain` (CharField, netloc of `sync_data()`'s `domain_api`) discriminates instances. `get_networks` seeds its delete candidate list from `Networks.objects.filter(domain=domain)` only, so an id absent from one upstream's `/api/networks/list/` can NEVER delete a network owned by another upstream. Enforced by `networks/tests.py::GetNetworksTest::test_sync_of_one_domain_never_deletes_another_domains_networks` |
+| V50 | **Cron runs image code, never a volume shadow** — no service may bind/volume-mount `/app` of the `backone-data` image; the crontab lives at `/etc/crontabs/root` inside the image, so a code fix reaches cron only when the crond service references the fixed image AND nothing shadows `/app`. Known ceiling: same-domain network removal still cascades to that domain's `Members` (retained `on_delete=CASCADE`), so V3 holds only cross-domain — see B5 |
 
 | ID | Status | Task | Cites |
 |---|---|---|---|
@@ -187,6 +203,11 @@ Unchanged: `0 * * * * python /app/manage.py shell --command "from config.workers
 | T22 | ✅ | Backend: dashboard aggregate endpoint per `network_group` — BAA count (`upload_baa!=null`), invoice count (`invoice_number!=null`), dismantle count (`offline_at!=null`); Top Networks retained | C22,V22 |
 | T23 | ✅ | FE: `/sites` grid — replace blanket "no Ubah on synced" with role-scoped edit affordance (T12 superseded): Sales edits PO user/link/BAA status, Finance invoice, Purchasing PO vendor; core cols stay read-only | C8,V5,V20 |
 | T24 | ✅ | FE: member_links editor — "Add link" per site (create-first; 0/100 prod sites have links), inline edit/delete after creation; fields role/service/provider/capacity/sid | V21,V24 |
+| T44 | ✅ | FE: remove `service_line`, `location`, `quota_string` from `scalarDefsFor` in `site-edit-form.tsx`; keep `network` with `displayFor: (r) => r.network_name ?? ""` to show Network Name instead raw PK; add `displayFor` optional field to `ScalarDef` type; coerce `network` to number in submit payload; use `displayFor` for disabled text input display value | V45 |
+| T45 | ✅ | FE: add `invoice_number` scalar field for Finance in `scalarDefsFor` (`site-edit-form.tsx`) — field already in Finance `WRITE_BY_ROLE` in `data.ts` (no change needed there) | V45 |
+| T46 | ✅ | Backend: updated `members/rbac.py` — narrowed `WRITE_BY_ROLE["Support"]` to `{"ip_address", "member_links"}`; expanded `WRITE_BY_ROLE["Purchasing"]` to `{"po_file_vendor", "project_number"}`; expanded `WRITE_BY_ROLE["Sales"]` to add `{"sdwan_package", "po_file_user"}`; added `project_number` to `READ_EXTRA_BY_ROLE["Purchasing"]` (V46,V47,V48) | V46,V47,V48 |
+| T47 | ✅ | FE: updated `WRITE_BY_ROLE` in `data.ts` — Support: `{"ip_address","member_links"}`; Purchasing: `{"po_file_vendor","project_number"}`; Sales: added `{"sdwan_package","po_file_user"}`; `writableFieldSet()` + `isFieldWritable()` automatically reflect changes | V46,V47,V48 |
+| T48 | ✅ | Multi-domain sync: add `Networks.domain` (CharField 100, `default=''`) + migration `networks.0004` (AddField + RunPython backfill `''`→`manage.backone.cloud`); `get_networks` keys `_netloc(domain_api)` and scopes the delete list to `filter(domain=domain)`; restore VN cron line in `dockerize/cronjobs`; remove the `backone-data-app` volume mount from `backone-data-crond` (it shadowed `/app` with 2025-10-27 code). Verified: 59 tests OK; `makemigrations --check` no changes; deployed by digest; live VN sync 1207→1228 members / 26→45 networks with bc=26 intact; ping-pong both directions zero deletions; real 11:00 cron tick ran both lines clean | C15,V49,V50 |
 
 | T25 | ✅ | FE: file upload UI for feature files on synced sites (PO user / PO vendor / invoice) → BFF multipart → Django upload; size/ext errors surface (10MB, PDF/XLS/XLSX/DOC/DOCX) | C23,T13,V20 |
 
@@ -217,3 +238,4 @@ Unchanged: `0 * * * * python /app/manage.py shell --command "from config.workers
 | B2 | 2026-09-08 | `get_quota_usage()` NameError on empty quota_string | Init `quota_usage = 0` before block |
 | B3 | 2026-09-08 | Sync deleted all networks on failed upstream call | Early return on API failure; only populate list after success |
 | B4 | 2026-09-09 | Both write serializers (`MemberSerializer.update`, `MemberFileSerializer.update`) hard-blocked ALL `is_manual=False` (synced) writes — would reject Sales/Finance/Purchasing feature edits on the 1,534 prod synced sites | Amend gate to feature-field-permissive on synced (V5/V20); core/identity stay read-only |
+| B5 | 2026-09-17 | `get_networks()` seeded its delete list from ALL `Networks` rows with no domain filter, so a second upstream's sync treated every other domain's network ids as deleted and removed them, CASCADE-deleting their Members — enabling the vn cron line would have destroyed all 1207 backone sites | Add `Networks.domain` + migration `networks.0004` (backfills existing 26 rows to `manage.backone.cloud`); scope `current_networks_list` to `filter(domain=domain)`. Cite V49 |

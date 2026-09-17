@@ -5,6 +5,14 @@ from django.utils.translation import gettext_lazy as _
 from .models import Organizations
 
 
+# Wagtail 7.x dropped WAGTAIL_USER_EDIT_FORM setting.
+# Patch UserViewSet.get_form_class to return our custom forms with organization field.
+from wagtail.users.views.users import UserViewSet as _UVS
+from .forms import CustomUserEditForm as _EditForm, CustomUserCreationForm as _CreateForm
+
+_UVS.get_form_class = lambda self, for_update=False: _EditForm if for_update else _CreateForm
+
+
 class OrganizationsViewSet(SnippetViewSet):
     model = Organizations
     menu_label = 'Organizations'

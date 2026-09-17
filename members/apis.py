@@ -5,12 +5,13 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
 from rest_framework import serializers
+from django.http import HttpResponse
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.decorators import action
 from openpyxl import Workbook
 from .models import Members, MemberLink
 from .serializers import MemberSerializer, MemberFileSerializer, MemberLinkSerializer
-from .rbac import readable_fields, writable_fields
+from .rbac import readable_fields, writable_fields, sees_all_sites
 from rest_framework.permissions import BasePermission
 from .models import Members, MemberLink, SdwanPackage, BaaStatus, LinkRole
 
@@ -67,17 +68,9 @@ class RoleLookupViewSet(_LookupViewSetBase):
     serializer_class = _make_lookup_serializer(LinkRole)
 
 
-
-def _is_authorized_all(user):
-    if user.is_superuser:
-        return True
-    names = set(user.groups.values_list("name", flat=True))
-    return bool({"Support", "External", "External Network"} & names)
-
-
 def member_queryset_for(user):
     """Full role-set queryset (active + dismantled) — aggregates/detail never double-filter (V25)."""
-    if _is_authorized_all(user):
+    if sees_all_sites(user):
         qs = Members.objects.all()
     elif user.organization is None:
         return Members.objects.none()
@@ -113,13 +106,16 @@ class SitesViewSet(viewsets.ModelViewSet):
         qs = member_queryset_for(self.request.user)
         if self.action == "list":
             qs = apply_status_filter(qs, self.request.query_params.get("status", "active"))
+            # Filter by network IDs when ?network= is present (V34 site picker).
+            nets = self.request.query_params.getlist("network")
+            if nets:
+                qs = qs.filter(network_id__in=nets)
         return qs
 
     def create(self, request, *args, **kwargs):
-        if not _is_authorized_all(request.user):
+        if not sees_all_sites(request.user):
             raise PermissionDenied("Only Support/superuser may create manual sites.")
         data = request.data.copy()
-        data["is_manual"] = True
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -133,6 +129,19 @@ class SitesViewSet(viewsets.ModelViewSet):
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        site.refresh_from_db()
+        out = MemberSerializer(site, context={"request": request})
+        return Response(out.data)
+    FILE_FIELD_NAMES = {"upload_baa", "po_file_user", "po_file_vendor", "invoice_file", "bap_file"}
+
+    @action(detail=True, methods=["post"], url_path="delete-file")
+    def delete_file(self, request, pk=None):
+        site = self.get_object()
+        field_name = request.data.get("field")
+        if field_name not in self.FILE_FIELD_NAMES:
+            return Response({"detail": "Invalid field name."}, status=400)
+        setattr(site, field_name, None)
+        site.save(update_fields=[field_name])
         site.refresh_from_db()
         out = MemberSerializer(site, context={"request": request})
         return Response(out.data)
@@ -160,7 +169,7 @@ class SitesViewSet(viewsets.ModelViewSet):
                 total=Count("id"),
                 baa=Count("id", filter=~Q(upload_baa="")),
                 invoice=Count("id", filter=~Q(invoice_number__isnull=True) & ~Q(invoice_number="")),
-                dismantle=Count("id", filter=~Q(offline_at__isnull=True)),
+                dismantle=Count("id", filter=Q(offline_at__isnull=False) & Q(offline_at__lte=now)),
             )
             .order_by("network__network_group__name")
         )
@@ -202,7 +211,7 @@ class SitesViewSet(viewsets.ModelViewSet):
             }
         )
 
-    @action(detail=False, methods=["get"], url_path="export.xlsx")
+    @action(detail=False, methods=["get"], url_path="export", url_name="export-xlsx")
     def export(self, request):
         from django.utils import timezone as tz
         qs = apply_status_filter(

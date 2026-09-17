@@ -31,6 +31,12 @@ class Networks(models.Model):
     description = models.TextField(_('Description'), blank=True)
     network_id = models.CharField(_('Network ID'), max_length=50, unique=True)
 
+    # Upstream instance owning this row: netloc of sync_data()'s domain_api.
+    # Scopes sync deletion so one domain's absence from its own API can never
+    # delete another domain's rows. ponytail: plain CharField, no FK/choices —
+    # upgrade to a Domain table if a third instance ever appears.
+    domain = models.CharField(_('Source Domain'), max_length=100, blank=True, default='')
+
     network_group = models.ForeignKey(
             NetworksGroup,
             on_delete=models.SET_NULL,

@@ -83,13 +83,14 @@ class MemberSerializer(serializers.ModelSerializer):
         from django.utils import timezone
         return 1 if obj.offline_at >= timezone.now() else 0
 
+    _FILE_FIELDS = ("upload_baa", "invoice_file", "po_file_user", "po_file_vendor", "bap_file")
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        user = self.context.get("request").user if self.context.get("request") else None
-        allowed = readable_fields(user) if user else set(self.Meta.fields)
-        for name in list(data.keys()):
-            if name not in allowed:
-                data.pop(name, None)
+        for f in self._FILE_FIELDS:
+            val = data.get(f)
+            if val and isinstance(val, str) and val.startswith("http"):
+                data[f] = val.split("/media/", 1)[-1]
         return data
 
     def _assert_writable(self, validated_data):

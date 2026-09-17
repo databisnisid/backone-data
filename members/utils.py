@@ -41,6 +41,7 @@ def get_members_by_net(domain_api, network_id):
                 logger.debug("Creating new member: %s", resp_json)
                 member = Members()
                 member.member_id = member_id
+                member.is_manual = False
 
             member.name = member_name
             member.description = member_description

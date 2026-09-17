@@ -1,1 +1,5 @@
-0 * * * * python /app/manage.py shell --command "from config.workers import sync_data; sync_data('https://manage.backone.cloud')" 
+# Each line syncs its own upstream instance. get_networks() scopes deletion to
+# rows whose `domain` matches the upstream being synced, so one domain's
+# response can never delete the other's networks (members ride the cascade).
+0 * * * * python /app/manage.py shell --command "from config.workers import sync_data; sync_data('https://manage.backone.cloud')"
+0 * * * * python /app/manage.py shell --command "from config.workers import sync_data; sync_data('https://manage.vn.backone.cloud')"

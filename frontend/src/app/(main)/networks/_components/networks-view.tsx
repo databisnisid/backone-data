@@ -85,6 +85,8 @@ export function NetworksView({ isSuperuser }: { isSuperuser: boolean }) {
       toast.error((e as Error).message);
     }
   }, []);
+  // Fetch data on mount.
+  React.useEffect(() => { void load(); }, [load]);
 
   const groupName = (id: number | null) => groups.find((g) => g.id === id)?.name ?? "Ungroup";
   // --- group CRUD ---
@@ -97,20 +99,36 @@ export function NetworksView({ isSuperuser }: { isSuperuser: boolean }) {
   const [siteOptions, setSiteOptions] = React.useState<SiteOption[]>([]);
   const [deleteTarget, setDeleteTarget] = React.useState<NetworkGroup | null>(null);
 
-  // Debounced site search for the picker (V34).
+  // Build network IDs query string for site picker.
+  const netsParam = React.useMemo(
+    () => [...selected].map((id) => `network=${id}`).join("&"),
+    [selected],
+  );
+
+  // Auto-load first 50 sites from selected networks when selection changes.
+  React.useEffect(() => {
+    setSiteOptions([]);
+    setSiteQuery("");
+    if (!selected.size) return;
+    const t = setTimeout(() => {
+      void get<SiteOption[]>(`/api/backend/members/sites?${netsParam}`)
+        .then(setSiteOptions)
+        .catch(() => {});
+    }, 300);
+    return () => clearTimeout(t);
+  }, [netsParam, selected.size]);
+
+  // Debounced search filtered by selected networks.
   React.useEffect(() => {
     const q = siteQuery.trim();
-    if (!q) {
-      setSiteOptions([]);
-      return;
-    }
+    if (!q || !selected.size) return;
     const t = setTimeout(() => {
-      void get<SiteOption[]>(`/api/backend/members/sites?search=${encodeURIComponent(q)}`)
+      void get<SiteOption[]>(`/api/backend/members/sites?search=${encodeURIComponent(q)}&${netsParam}`)
         .then(setSiteOptions)
         .catch((e) => toast.error((e as Error).message));
     }, 350);
     return () => clearTimeout(t);
-  }, [siteQuery]);
+  }, [siteQuery, netsParam, selected.size]);
 
   const openCreate = () => {
     setEditing(null);
@@ -331,17 +349,26 @@ export function NetworksView({ isSuperuser }: { isSuperuser: boolean }) {
             <div className="flex flex-col gap-1.5">
               <Label>Member Sites (opsional)</Label>
               <p className="text-muted-foreground text-sm">
-                Pilih situs secara langsung sebagai anggota grup (di luar situs yang otomatis lewat network).
+                Pilih situs secara langsung sebagai anggota grup dari network yang dipilih.
               </p>
               <Input
                 value={siteQuery}
                 onChange={(e) => setSiteQuery(e.target.value)}
-                placeholder="Cari situs…"
+                placeholder={selected.size ? "Cari situs…" : "Pilih network terlebih dahulu…"}
+                disabled={!selected.size}
               />
               <div className="max-h-40 overflow-y-auto rounded-md border p-2">
-                {!siteQuery.trim() && (
+                {!selected.size && (
                   <p className="text-muted-foreground text-sm">
-                    Ketik untuk mencari situs dari seluruh daftar.
+                    Centang network di atas terlebih dahulu untuk melihat daftar situs.
+                  </p>
+                )}
+                {selected.size > 0 && !siteQuery.trim() && siteOptions.length === 0 && (
+                  <p className="text-muted-foreground text-sm">Memuat…</p>
+                )}
+                {selected.size > 0 && !siteQuery.trim() && siteOptions.length > 0 && (
+                  <p className="text-muted-foreground text-sm">
+                    {siteOptions.length} situs ditampilkan. Ketik untuk mencari lebih banyak.
                   </p>
                 )}
                 {siteQuery.trim() && siteOptions.length === 0 && (

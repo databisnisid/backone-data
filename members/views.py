@@ -4,7 +4,7 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from django.conf import settings
 from django.utils import timezone
-from accounts.models import User, Organizations
+from .rbac import sees_all_sites
 from .models import Members
 
 
@@ -59,13 +59,19 @@ def prepare_data(members):
 
 @login_required
 def get_members_by_user(request, user):
-    user = User.objects.get(id=user)
-
-    if user.organization is None:
+    """Legacy JSON feed, keyed by request.user only — the URL's `user` id is
+    ignored so it can't be used to enumerate another org (was an IDOR). Org-scoped
+    per SPEC §I; no org means no rows (was: every row)."""
+    if sees_all_sites(request.user):
         members = Members.objects.all()
     else:
-        networks = user.organization.networks.all()
-        members = Members.objects.filter(network__in=networks, offline_at__isnull=True) | Members.objects.filter(network__in=networks, offline_at__gt=timezone.now())
+        org = request.user.organization
+        if org is None:
+            return JsonResponse([], safe=False)
+        networks = org.networks.all()
+        members = Members.objects.filter(
+            network__in=networks, offline_at__isnull=True
+        ) | Members.objects.filter(network__in=networks, offline_at__gt=timezone.now())
 
     members_data = prepare_data(members)
 

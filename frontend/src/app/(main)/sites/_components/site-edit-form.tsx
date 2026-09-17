@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { Link2, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
+import { Link2, Pencil, Plus, Trash2, Upload, X, FileText } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -12,12 +12,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
-import { createSiteLink, deleteSiteLink, fetchLinkServices, fetchMemberOptions, fetchSite, patchSiteLink, uploadSiteFile, type MemberOptions } from "./api";
+import { createSiteLink, deleteSiteFile, deleteSiteLink, fetchLinkServices, fetchMemberOptions, fetchSite, patchSiteLink, uploadSiteFile, type MemberOptions } from "./api";
 import {
-  isFinance,
-  isPurchasing,
-  isSales,
-  isSupport,
+  isFieldWritable,
   type Me,
   type SiteLink,
   type SiteRow,
@@ -30,63 +27,52 @@ type ScalarDef = {
   label: string;
   kind: "text" | "select" | "textarea";
   choices?: string[];
+  writable: boolean;
+  displayFor?: (row: SiteRow) => string;
 };
 
+// V34-view: all fields shown to all 5 groups; non-writable fields rendered disabled.
 function scalarDefsFor(me: Me, options: MemberOptions): ScalarDef[] {
-  if (isSupport(me)) {
-    return [
-      { name: "name", label: "Nama Site", kind: "text" },
-      { name: "address", label: "Alamat", kind: "text" },
-      { name: "member_code", label: "Kode Situs", kind: "text" },
-      { name: "project_number", label: "Project Number", kind: "text" },
-      { name: "sdwan_package", label: "Paket Layanan (SDWAN)", kind: "select", choices: options.sdwan_package },
-      { name: "baa_status_category", label: "Status BAA", kind: "select", choices: options.baa_status_category },
-      { name: "notes", label: "Keterangan", kind: "textarea" },
-    ];
-  }
-  if (isSales(me)) {
-    return [
-      { name: "member_code", label: "Kode Situs", kind: "text" },
-      { name: "baa_status_category", label: "Status BAA", kind: "select", choices: options.baa_status_category },
-      { name: "notes", label: "Keterangan", kind: "textarea" },
-    ];
-  }
-  if (isFinance(me)) {
-    return [
-      { name: "invoice_number", label: "No Invoice", kind: "text" },
-      { name: "notes", label: "Keterangan", kind: "textarea" },
-    ];
-  }
-  if (isPurchasing(me)) {
-    return [{ name: "notes", label: "Keterangan", kind: "textarea" }];
-  }
-  return [];
+  const defs: { name: string; label: string; kind: "text" | "select" | "textarea"; choices?: string[]; displayFor?: (row: SiteRow) => string }[] = [
+    { name: "name", label: "Nama Site", kind: "text" },
+    { name: "address", label: "Alamat", kind: "text" },
+    { name: "member_code", label: "Kode Situs", kind: "text" },
+    { name: "member_id", label: "Member ID", kind: "text" },
+    { name: "online_at", label: "Online At", kind: "text" },
+    { name: "offline_at", label: "Offline At", kind: "text" },
+    { name: "network", label: "Network", kind: "text", displayFor: (r) => r.network_name ?? "" },
+    { name: "project_number", label: "Project Number", kind: "text" },
+    { name: "sdwan_package", label: "Paket Layanan (SDWAN)", kind: "select", choices: options.sdwan_package },
+    { name: "baa_status_category", label: "Status BAA", kind: "select", choices: options.baa_status_category },
+    { name: "invoice_number", label: "Nomor Invoice", kind: "text" },
+    { name: "notes", label: "Keterangan", kind: "textarea" },
+    { name: "ip_address", label: "IP Address", kind: "text" },
+  ];
+  return defs.map((d) => ({ ...d, writable: isFieldWritable(me, d.name) }));
 }
 
-function fileFieldsFor(me: Me): { field: string; label: string }[] {
-  if (isSupport(me)) {
-    return [
-      { field: "upload_baa", label: "Upload BAA" },
-      { field: "po_file_user", label: "PO dari User" },
-      { field: "po_file_vendor", label: "PO ke Vendor" },
-      { field: "invoice_file", label: "Upload Bukti Invoice" },
-      { field: "bap_file", label: "BAP Dismantle" },
-    ];
-  }
-  if (isSales(me)) return [{ field: "upload_baa", label: "Upload BAA (Sales)" }];
-  if (isFinance(me)) return [{ field: "invoice_file", label: "Upload Bukti Invoice" }];
-  if (isPurchasing(me)) return [{ field: "po_file_vendor", label: "Upload PO ke Vendor" }];
-  return [];
+// V34-view: all file fields shown; non-writable disabled.
+function fileFieldsFor(me: Me): { field: string; label: string; writable: boolean }[] {
+  const defs = [
+    { field: "upload_baa", label: "Upload BAA" },
+    { field: "po_file_user", label: "PO dari User" },
+    { field: "po_file_vendor", label: "PO ke Vendor" },
+    { field: "invoice_file", label: "Upload Bukti Invoice" },
+    { field: "bap_file", label: "BAP Dismantle" },
+  ];
+  return defs.map((d) => ({ ...d, writable: isFieldWritable(me, d.field) }));
 }
+
 
 function useLinkServices(me: Me): { id: number; name: string }[] {
   const [services, setServices] = React.useState<{ id: number; name: string }[]>([]);
+  const canEditLinks = isFieldWritable(me, "member_links");
   React.useEffect(() => {
-    if (!isSales(me) && !isSupport(me)) return;
+    if (!canEditLinks) return;
     fetchLinkServices()
       .then(setServices)
       .catch(() => setServices([]));
-  }, [me]);
+  }, [canEditLinks]);
   return services;
 }
 
@@ -125,29 +111,13 @@ export function SiteEditForm({
   const memberOptions = useMemberOptions();
   const scalarDefs = scalarDefsFor(me, memberOptions);
   const fileFields = fileFieldsFor(me);
-  // Synced (upstream) sites: CORE_EDIT_FIELDS (mirrors members/rbac.py) are
-  // rejected server-side, so render them disabled instead of letting superuser
-  // hit a 400. Feature fields stay editable.
-  const isSynced = !row.is_manual;
-  const CORE_FIELD_NAMES = new Set([
-    "name",
-    "member_id",
-    "address",
-    "location",
-    "online_at",
-    "offline_at",
-    "service_line",
-    "network",
-    "links",
-  ]);
-  const coreReadOnly = (name: string) => isSynced && CORE_FIELD_NAMES.has(name);
   const [draft, setDraft] = React.useState<Record<string, string>>(() =>
     Object.fromEntries(
       scalarDefs.map((d) => [d.name, (row as unknown as Record<string, string | null>)[d.name] ?? ""]),
     ),
   );
   const dirty = scalarDefs
-    .filter((d) => !coreReadOnly(d.name))
+    .filter((d) => d.writable)
     .filter((d) => (draft[d.name] ?? "") !== ((row as unknown as Record<string, string | null>)[d.name] ?? ""))
     .map((d) => d.name);
 
@@ -160,7 +130,7 @@ export function SiteEditForm({
     const payload: Record<string, unknown> = {};
     for (const name of dirty) {
       const v = draft[name];
-      payload[name] = v === "" ? null : v;
+      payload[name] = v === "" ? null : (name === "network" ? Number(v) : v);
     }
     onSave(row.id, payload);
   };
@@ -176,8 +146,7 @@ export function SiteEditForm({
     }
   }
   const services = useLinkServices(me);
-  // Support/superuser and Sales may write member_links (V24 mirrors WRITE_BY_ROLE).
-  const canEditLinks = isSupport(me) || isSales(me);
+  const canEditLinks = isFieldWritable(me, "member_links");
   const [newLink, setNewLink] = React.useState<Partial<SiteLink>>({
     role: "MAIN",
     service: null,
@@ -219,6 +188,16 @@ export function SiteEditForm({
       toast.error((e as Error).message);
     }
   }
+  async function onFileDelete(field: string) {
+    try {
+      await deleteSiteFile(row.id, field);
+      const updated = await fetchSite(row.id);
+      onRowUpdate(updated);
+      toast.success("File dihapus");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -236,74 +215,100 @@ export function SiteEditForm({
         </div>
       </div>
 
-      <FieldGroup className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {scalarDefs.map((def) => {
-          const isDirty = dirty.includes(def.name);
-          const readOnly = coreReadOnly(def.name);
-          let control: React.ReactNode;
-          if (def.kind === "select") {
-            control = (
-              <div className="flex flex-col gap-1.5">
-                <FieldLabel htmlFor={`edit-${def.name}`}>{def.label}</FieldLabel>
-                <Select
-                  value={draft[def.name] || undefined}
-                  disabled={readOnly}
-                  onValueChange={(v) => setDraft((d) => ({ ...d, [def.name]: v }))}
-                >
-                  <SelectTrigger id={`edit-${def.name}`} className="w-full">
-                    <SelectValue placeholder="Pilih..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {def.choices?.map((c) => (
-                      <SelectItem key={c} value={c}>
-                        {c}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+      {/* Read-only info fields */}
+      {(() => {
+        const INFO_FIELDS = ["name", "address", "member_id", "online_at", "offline_at", "network"];
+        const infoDefs = scalarDefs.filter((d) => INFO_FIELDS.includes(d.name));
+        const editDefs = scalarDefs.filter((d) => !INFO_FIELDS.includes(d.name));
+        return (
+          <>
+            <div className="flex flex-col gap-2">
+              <div className="text-muted-foreground flex items-center gap-2 text-xs font-medium">
+                <FileText className="size-3.5" /> INFORMASI SITUS
               </div>
-            );
-          } else if (def.kind === "textarea") {
-            control = (
-              <div className="flex flex-col gap-1.5">
-                <FieldLabel htmlFor={`edit-${def.name}`}>{def.label}</FieldLabel>
-                <Textarea
-                  id={`edit-${def.name}`}
-                  value={draft[def.name]}
-                  disabled={readOnly}
-                  onChange={(e) => setDraft((d) => ({ ...d, [def.name]: e.target.value }))}
-                />
+              <div className="grid grid-cols-2 gap-x-6 gap-y-1 rounded-md border border-border bg-muted/30 px-4 py-3 md:grid-cols-3">
+                {infoDefs.map((def) => {
+                  const val = def.displayFor ? def.displayFor(row) : draft[def.name];
+                  return (
+                    <div key={def.name} className="flex flex-col gap-0.5">
+                      <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">{def.label}</span>
+                      <span className="text-sm">{val || <span className="text-muted-foreground">—</span>}</span>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          } else {
-            control = (
-              <Field className="gap-1.5">
-                <FieldLabel htmlFor={`edit-${def.name}`}>{def.label}</FieldLabel>
-                <Input
-                  id={`edit-${def.name}`}
-                  value={draft[def.name]}
-                  disabled={readOnly}
-                  onChange={(e) => setDraft((d) => ({ ...d, [def.name]: e.target.value }))}
-                />
-              </Field>
-            );
-          }
-          return (
-            <div
-              key={def.name}
-              className={
-                readOnly
-                  ? "rounded-md bg-muted/30"
-                  : isDirty
-                    ? "rounded-md ring-2 ring-primary/40"
-                    : ""
-              }
-            >
-              {control}
             </div>
-          );
-        })}
-      </FieldGroup>
+            <FieldGroup className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {editDefs.map((def) => {
+                const isDirty = dirty.includes(def.name);
+                const readOnly = !def.writable;
+                let control: React.ReactNode;
+                if (def.kind === "select") {
+                  control = (
+                    <div className="flex flex-col gap-1.5">
+                      <FieldLabel htmlFor={`edit-${def.name}`}>{def.label}</FieldLabel>
+                      <Select
+                        value={draft[def.name] || undefined}
+                        disabled={readOnly}
+                        onValueChange={(v) => setDraft((d) => ({ ...d, [def.name]: v }))}
+                      >
+                        <SelectTrigger id={`edit-${def.name}`} className="w-full">
+                          <SelectValue placeholder="Pilih..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {def.choices?.map((c) => (
+                            <SelectItem key={c} value={c}>
+                              {c}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  );
+                } else if (def.kind === "textarea") {
+                  control = (
+                    <div className="flex flex-col gap-1.5">
+                      <FieldLabel htmlFor={`edit-${def.name}`}>{def.label}</FieldLabel>
+                      <Textarea
+                        id={`edit-${def.name}`}
+                        value={draft[def.name]}
+                        disabled={readOnly}
+                        onChange={(e) => setDraft((d) => ({ ...d, [def.name]: e.target.value }))}
+                      />
+                    </div>
+                  );
+                } else {
+                  control = (
+                    <Field className="gap-1.5">
+                      <FieldLabel htmlFor={`edit-${def.name}`}>{def.label}</FieldLabel>
+                      <Input
+                        id={`edit-${def.name}`}
+                        value={def.displayFor ? def.displayFor(row) : draft[def.name]}
+                        disabled={readOnly}
+                        onChange={(e) => setDraft((d) => ({ ...d, [def.name]: e.target.value }))}
+                      />
+                    </Field>
+                  );
+                }
+                return (
+                  <div
+                    key={def.name}
+                    className={
+                      readOnly
+                        ? "rounded-md bg-muted/30"
+                        : isDirty
+                          ? "rounded-md ring-2 ring-primary/40"
+                          : ""
+                    }
+                  >
+                    {control}
+                  </div>
+                );
+              })}
+            </FieldGroup>
+          </>
+        );
+      })()}
       {canEditLinks && row.member_links.length > 0 && (
         <div className="flex flex-col gap-2">
           <div className="text-muted-foreground flex items-center gap-2 text-xs font-medium">
@@ -391,15 +396,70 @@ export function SiteEditForm({
         </div>
       )}
       {fileFields.length > 0 && (
-        <div className="flex flex-wrap gap-3">
-          {fileFields.map((f) => (
-            <label key={f.field} className="flex cursor-pointer items-center gap-2">
-              <span className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-1.5 font-medium text-muted-foreground text-xs">
-                <Upload className="size-3.5" /> {f.label}
-              </span>
-              <input type="file" className="hidden" onChange={(e) => onFile(f.field, e.target.files?.[0])} />
-            </label>
-          ))}
+        <div className="flex flex-col gap-3">
+          {/* Uploaded files list */}
+          {(() => {
+            const uploaded = fileFields.filter((f) => {
+              const val = (row as unknown as Record<string, string | null>)[f.field];
+              return !!val;
+            });
+            if (uploaded.length === 0) return null;
+            return (
+              <div className="flex flex-col gap-1">
+                <div className="text-muted-foreground flex items-center gap-2 text-xs font-medium">
+                  <FileText className="size-3.5" /> FILE TERUPLOAD
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  {uploaded.map((f) => {
+                    const val = (row as unknown as Record<string, string | null>)[f.field]!;
+                    const fileName = val.split("/").pop();
+                    const fileUrl = `/api/media/${val}`;
+                    return (
+                      <div key={f.field} className="flex items-center gap-2">
+                        <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-primary hover:underline text-xs">
+                          <FileText className="size-3.5 shrink-0" /> <span className="font-medium">{f.label}:</span> {fileName}
+                        </a>
+                        {me.is_superuser && (
+                          <button type="button" className="text-destructive hover:text-destructive/70" onClick={() => onFileDelete(f.field)} title={`Hapus ${f.label}`}>
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+          {/* Upload buttons */}
+          <div className="flex flex-col gap-1">
+            <div className="text-muted-foreground flex items-center gap-2 text-xs font-medium">
+              <Upload className="size-3.5" /> UNGGAH DOKUMEN
+            </div>
+            <div className="flex flex-wrap gap-3">
+              {fileFields.map((f) => {
+                const val = (row as unknown as Record<string, string | null>)[f.field];
+                const hasFile = !!val;
+                const fileName = hasFile ? val!.split("/").pop() : null;
+                const fileUrl = hasFile ? `/api/media/${val}` : null;
+                return f.writable ? (
+                  <label key={f.field} className={`flex flex-col gap-0.5 rounded-md border border-dashed border-muted-foreground/40 bg-muted/40 px-3 py-1.5 cursor-pointer hover:border-primary/60 hover:bg-muted/70 transition-colors`}>
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">{f.label}</span>
+                    <div className="flex items-center gap-1.5">
+                      <Upload className="size-3.5 text-muted-foreground" />
+                      <span className="text-muted-foreground text-xs">{hasFile ? `Ganti ${fileName}` : "Pilih file"}</span>
+                    </div>
+                    <input type="file" className="hidden" onChange={(e) => onFile(f.field, e.target.files?.[0])} />
+                  </label>
+                ) : (
+                  <div key={f.field} className="flex flex-col gap-0.5 rounded-md border border-border bg-muted/40 px-3 py-1.5 opacity-50">
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">{f.label}</span>
+                    <span className="text-muted-foreground text-xs">{hasFile ? fileName : "Tidak dapat diubah"}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
     </div>

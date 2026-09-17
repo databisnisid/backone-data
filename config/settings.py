@@ -192,13 +192,13 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'accounts.User'
 
 # Custom User Model - Wagtail Integration
-WAGTAIL_USER_EDIT_FORM = 'accounts.forms.CustomUserEditForm'
-WAGTAIL_USER_CREATION_FORM = 'accounts.forms.CustomUserCreationForm'
-WAGTAIL_USER_CUSTOM_FIELDS = ['organization']
+# WAGTAIL_USER_EDIT_FORM / WAGTAIL_USER_CREATION_FORM removed in Wagtail 7.x.
+# Custom forms are applied via monkey-patch in accounts/wagtail_hooks.py.
 
 # Wagtail
 WAGTAIL_SITE_NAME = str(os.getenv('WAGTAIL_SITE_NAME', 'BackOne Data'))
 WAGTAILADMIN_BASE_URL = str(os.getenv('WAGTAILADMIN_BASE_URL', 'http://localhost:8000'))
+BACKONE_EXTERNAL_URL = str(os.getenv('BACKONE_EXTERNAL_URL', WAGTAILADMIN_BASE_URL))
 WAGTAIL_ENABLE_WHATS_NEW_BANNER = False
 WAGTAIL_ENABLE_UPDATE_CHECK = False
 

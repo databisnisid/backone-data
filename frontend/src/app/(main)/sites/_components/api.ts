@@ -43,6 +43,15 @@ export async function uploadSiteFile(id: number, field: string, file: File) {
   });
   return jsonOrThrow<SiteRow>(res);
 }
+export async function deleteSiteFile(id: number, field: string) {
+  const res = await fetch(`/api/backend/members/sites/${id}/delete-file/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ field }),
+  });
+  return jsonOrThrow<SiteRow>(res);
+}
+
 export async function createSite(payload: Record<string, unknown>) {
   const res = await fetch("/api/backend/members/sites", {
     method: "POST",

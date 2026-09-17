@@ -30,9 +30,9 @@ CORE_EDIT_FIELDS = (
 
 WRITE_BY_ROLE = {
     "Superuser": set(CORE_EDIT_FIELDS + FEATURE_FIELDS) | {"member_links"},
-    "Support": set(CORE_EDIT_FIELDS + FEATURE_FIELDS),
-    "Sales": {"baa_status_category", "upload_baa", "notes", "member_links", "member_code"},
-    "Purchasing": {"po_file_vendor"},
+    "Support": {"ip_address", "member_links"},
+    "Sales": {"baa_status_category", "upload_baa", "notes", "member_links", "member_code", "sdwan_package", "po_file_user"},
+    "Purchasing": {"po_file_vendor", "project_number"},
     "Finance": {"invoice_number", "invoice_file", "notes"},
     "External": set(),
     "External Network": set(),
@@ -41,7 +41,7 @@ WRITE_BY_ROLE = {
 READ_EXTRA_BY_ROLE = {
     "Superuser": set(FEATURE_FIELDS),
     "Sales": {"baa_status_category", "upload_baa", "notes", "member_links"},
-    "Purchasing": {"po_file_vendor"},
+    "Purchasing": {"po_file_vendor", "project_number"},
     "Finance": {"invoice_number", "invoice_file", "po_file_user", "po_file_vendor", "notes"},
     "External": {"notes"},
     "External Network": {"notes"},
@@ -72,6 +72,15 @@ def roles_for(user):
         yield "Superuser"
     for group in user.groups.all():
         yield group.name
+
+
+def sees_all_sites(user):
+    """True when the user sees every site, not just their org's (SPEC §I RBAC map).
+    Superuser/Support only. External and External Network are org-scoped — adding
+    them here leaks every org's sites (the bug this predicate exists to prevent)."""
+    if user.is_superuser:
+        return True
+    return bool({"Support"} & set(user.groups.values_list("name", flat=True)))
 
 
 def writable_fields(user):
