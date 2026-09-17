@@ -67,7 +67,7 @@ Rework BackOne Data into full decoupled app: Next.js frontend (React 19, App Rou
 | C54 | **The dashboard provider panel stays ACTIVE-only** — it answers "which providers carry traffic now"; the grid's all-status default (C52) deliberately does NOT propagate to it. Prod makes the divergence concrete: grid `?provider=ICON` = 2 sites (3704 dismantled + 3705), panel `ICON` = 1 |
 | C55 | **`Download XLSX` stays active-only and keeps ignoring search/provider** — the trigger is a plain `<a href="/api/backend/members/sites/export">` carrying no params. V13 only ever promised "same RBAC/org filter as list view", so this divergence is pre-existing and spec-sanctioned, not created by C52 |
 | C56 | **The dismantled marker is FE-only** — `is_online === false` already IS V22's dismantle set (via V17), so no new backend field and no client-side date math. Badge and muted row are rendering only |
-| C57 | **Dismantled rows are marked by a TEXTUAL badge in the Situs (name) cell, not by colour** — a muted row is decoration on top, never the only signal. Text survives colour-blindness and grayscale hand-off; Timeline's `Offline` + `Stop:` date render stay unchanged |
+| C57 | **Dismantled rows are marked by a TEXTUAL badge in the Situs (name) cell, not by colour alone** — the text is what identifies the row; colour is decoration on top, never the only signal. A muted row plus a `variant="destructive"` badge (red tint) both sit on top of that text. Text survives colour-blindness and grayscale hand-off; Timeline's `Offline` + `Stop:` date render stay unchanged |
 
 | ID | Ruling | Source |
 |---|---|---|
