@@ -261,7 +261,7 @@ class SitesViewSet(viewsets.ModelViewSet):
                     }
                     for g in groups
                 ],
-                "provider_breakdown": provider_breakdown(qs),
+                "provider_breakdown": provider_breakdown(active_members_queryset(qs)),
             }
         )
     @action(detail=False, methods=["get"], url_path="options")

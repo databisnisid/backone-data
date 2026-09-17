@@ -618,3 +618,68 @@ class ProviderBreakdownTest(TestCase):
         c = APIClient()
         c.force_authenticate(user)
         return c
+
+
+class ProviderBreakdownStatusTest(TestCase):
+    """B7: the panel counts ACTIVE sites only, matching the /sites grid default.
+
+    Cites C50,V58. Prod shape: the site holding the provider links is
+    DISMANTLED while an active namesake holds none, so the full role set
+    read TELKOM=2/ICON=2 where /sites showed 1/1.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        from rest_framework.test import APIClient
+        from .models import LinkRole
+
+        self.api = APIClient()
+        self.role, _ = LinkRole.objects.get_or_create(name="MAIN")
+        self.net = Networks.objects.create(name="NetS", network_id="NS")
+        self.org = Organizations.objects.create(name="OrgS")
+        self.org.networks.add(self.net)
+
+        yesterday = timezone.now() - timedelta(days=1)
+        # Dismantled site carrying both providers — invisible on /sites.
+        self.old = Members.objects.create(
+            name="Old", member_id="OLD1", network=self.net, offline_at=yesterday
+        )
+        # Active site carrying both providers — the only one /sites shows.
+        self.new = Members.objects.create(
+            name="New", member_id="NEW1", network=self.net
+        )
+        for site in (self.old, self.new):
+            for provider in ("TELKOM", "ICON"):
+                MemberLink.objects.create(
+                    sid=f"{site.member_id}-{provider}",
+                    member=site,
+                    role=self.role,
+                    provider=provider,
+                )
+        # One active bare site (counts) and one dismantled bare site (must not).
+        Members.objects.create(name="BareActive", member_id="BA1", network=self.net)
+        Members.objects.create(
+            name="BareOld", member_id="BO1", network=self.net, offline_at=yesterday
+        )
+
+        self.user = User.objects.create_user(
+            username="status", password="pass1234", organization=self.org
+        )
+        self.user.groups.add(Group.objects.get_or_create(name="External")[0])
+        self.api.force_authenticate(self.user)
+
+    def _rows(self):
+        r = self.api.get("/api/members/sites/stats/")
+        self.assertEqual(r.status_code, 200)
+        return {x["provider"]: x["count"] for x in r.json()["provider_breakdown"]}
+
+    def test_dismantled_site_does_not_inflate_provider_counts(self):
+        # Full role set would say 2/2; active-only says 1/1 (the /sites default).
+        rows = self._rows()
+        self.assertEqual(rows["TELKOM"], 1)
+        self.assertEqual(rows["ICON"], 1)
+
+    def test_dismantled_bare_site_is_not_counted_as_tanpa_link(self):
+        # The complement must use the same active scope, so only BareActive
+        # lands in Tanpa Link (the full set would report 2).
+        self.assertEqual(self._rows()["Tanpa Link"], 1)
