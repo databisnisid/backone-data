@@ -11,10 +11,15 @@ export async function fetchMe() {
   return jsonOrThrow<import("./data").Me>(res);
 }
 
-export async function fetchSites(params: { page: number; search?: string }) {
+export async function fetchSites(params: {
+  page: number;
+  search?: string;
+  providers?: string[];
+}) {
   const q = new URLSearchParams();
   q.set("page", String(params.page));
   if (params.search) q.set("search", params.search);
+  for (const p of params.providers ?? []) q.append("provider", p);
   const res = await fetch(`/api/backend/members/sites?${q.toString()}`);
   return jsonOrThrow<Page<SiteRow>>(res);
 }
@@ -79,6 +84,11 @@ export type MemberOptions = {
 export async function fetchMemberOptions() {
   const res = await fetch("/api/backend/members/options/");
   return jsonOrThrow<MemberOptions>(res);
+}
+
+export async function fetchProviders() {
+  const res = await fetch("/api/backend/members/sites/providers/");
+  return jsonOrThrow<string[]>(res);
 }
 
 export async function createSiteLink(memberId: number, link: Partial<SiteLink>) {

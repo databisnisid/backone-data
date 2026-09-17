@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { Download, Plus, Search, X } from "lucide-react";
+import { ChevronDown, Download, Plus, Search, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -17,8 +17,16 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
-import { fetchMe, fetchSites, patchSite } from "./api";
+import { fetchMe, fetchProviders, fetchSites, patchSite } from "./api";
 import { CreateSiteDialog } from "./create-site-dialog";
 import {
   type ColVisibility,
@@ -168,6 +176,8 @@ export function SitesView() {
   const [total, setTotal] = React.useState(0);
   const [page, setPage] = React.useState(1);
   const [search, setSearch] = React.useState("");
+  const [providers, setProviders] = React.useState<string[]>([]);
+  const [providerOptions, setProviderOptions] = React.useState<string[]>([]);
   const [editingId, setEditingId] = React.useState<number | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [createOpen, setCreateOpen] = React.useState(false);
@@ -178,10 +188,16 @@ export function SitesView() {
       .catch((e) => toast.error((e as Error).message));
   }, []);
 
+  React.useEffect(() => {
+    fetchProviders()
+      .then((p) => setProviderOptions(p))
+      .catch((e) => toast.error((e as Error).message));
+  }, []);
+
   const load = React.useCallback(async () => {
     setLoading(true);
     try {
-      const data = await fetchSites({ page, search });
+      const data = await fetchSites({ page, search, providers });
       setRows(data.results);
       setTotal(data.count);
     } catch (e) {
@@ -189,7 +205,7 @@ export function SitesView() {
     } finally {
       setLoading(false);
     }
-  }, [page, search]);
+  }, [page, search, providers]);
 
   React.useEffect(() => {
     void load();
@@ -334,30 +350,72 @@ export function SitesView() {
         </div>
       </div>
 
-      <div className="relative w-72">
-        <Search className="absolute top-2.5 left-2.5 size-4 text-muted-foreground" />
-        <Input
-          className="pl-8"
-          placeholder="Pencarian sites..."
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-        />
-        {search && (
-          <button
-            type="button"
-            aria-label="Clear search"
-            className="absolute top-2.5 right-2 text-muted-foreground"
-            onClick={() => {
-              setSearch("");
+      <div className="flex items-center gap-2">
+        <div className="relative w-72">
+          <Search className="absolute top-2.5 left-2.5 size-4 text-muted-foreground" />
+          <Input
+            className="pl-8"
+            placeholder="Pencarian sites..."
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
               setPage(1);
             }}
-          >
-            <X className="size-4" />
-          </button>
-        )}
+          />
+          {search && (
+            <button
+              type="button"
+              aria-label="Clear search"
+              className="absolute top-2.5 right-2 text-muted-foreground"
+              onClick={() => {
+                setSearch("");
+                setPage(1);
+              }}
+            >
+              <X className="size-4" />
+            </button>
+          )}
+        </div>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="w-48 justify-between font-normal">
+              {providers.length === 0 ? "Semua Provider" : `${providers.length} Provider`}
+              <ChevronDown className="size-4 opacity-50" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
+            {providerOptions.length === 0 && (
+              <div className="px-2 py-1.5 text-sm text-muted-foreground">Tidak ada provider.</div>
+            )}
+            {providerOptions.map((p) => (
+              <DropdownMenuCheckboxItem
+                key={p}
+                checked={providers.includes(p)}
+                onSelect={(e) => e.preventDefault()}
+                onCheckedChange={(on) => {
+                  setProviders((prev) => (on ? [...prev, p] : prev.filter((x) => x !== p)));
+                  setPage(1);
+                }}
+              >
+                {p}
+              </DropdownMenuCheckboxItem>
+            ))}
+            {providers.length > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setProviders([]);
+                    setPage(1);
+                  }}
+                >
+                  <X className="size-4" /> Reset
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <Card>

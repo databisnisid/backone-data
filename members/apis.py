@@ -1,4 +1,4 @@
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
@@ -94,6 +94,50 @@ def apply_status_filter(qs, status):
     return qs  # "all" or unknown → full role set
 
 
+NO_LINK = "Tanpa Link"  # C41 sentinel: sites with zero MemberLink rows
+
+
+def link_providers(user):
+    """Distinct non-empty providers over the caller's own scoped sites (C41/V56).
+
+    Scoped by member_queryset_for so a tenant never learns another org's
+    provider names from the dropdown.
+    """
+    return list(
+        MemberLink.objects.filter(member__in=member_queryset_for(user))
+        .exclude(provider__isnull=True)
+        .exclude(provider="")
+        .values_list("provider", flat=True)
+        .distinct()
+        .order_by("provider")
+    )
+
+
+def apply_provider_filter(qs, providers):
+    """?provider=A&provider=B on the sites list — C41, V56.
+
+    Selections OR within the provider dimension. Exists() (not a bare
+    reverse-FK join) so a site with two matching links appears once.
+    """
+    # V56: empty selection is a no-op, never an empty grid. Blank values are
+    # dropped too, so a stray `?provider=` cannot mean "sites with no links".
+    providers = [p for p in providers if p]
+    if not providers:
+        return qs
+    named = [p for p in providers if p != NO_LINK]
+    clauses = []
+    if named:
+        clauses.append(
+            Exists(MemberLink.objects.filter(member=OuterRef("pk"), provider__in=named))
+        )
+    if NO_LINK in providers:
+        clauses.append(~Exists(MemberLink.objects.filter(member=OuterRef("pk"))))
+    predicate = clauses[0]
+    for clause in clauses[1:]:
+        predicate |= clause
+    return qs.filter(predicate)
+
+
 class SitesViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = MemberSerializer
@@ -110,6 +154,7 @@ class SitesViewSet(viewsets.ModelViewSet):
             nets = self.request.query_params.getlist("network")
             if nets:
                 qs = qs.filter(network_id__in=nets)
+            qs = apply_provider_filter(qs, self.request.query_params.getlist("provider"))
         return qs
 
     def create(self, request, *args, **kwargs):
@@ -210,6 +255,16 @@ class SitesViewSet(viewsets.ModelViewSet):
                 "role": list(LinkRole.objects.order_by("name").values_list("name", flat=True)),
             }
         )
+
+    @action(detail=False, methods=["get"], url_path="providers")
+    def providers(self, request):
+        """Distinct link providers the caller's own sites carry (C41,V56).
+
+        Scoped by member_queryset_for — a tenant never learns another org's
+        provider names. The C41 sentinel is appended so zero-link sites stay
+        reachable (1226 of 1228 prod sites).
+        """
+        return Response(link_providers(request.user) + [NO_LINK])
 
     @action(detail=False, methods=["get"], url_path="export", url_name="export-xlsx")
     def export(self, request):

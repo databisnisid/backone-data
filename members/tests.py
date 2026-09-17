@@ -4,7 +4,7 @@ from django.utils import timezone
 from django.conf import settings
 from datetime import timedelta
 from networks.models import Networks
-from .models import Members
+from .models import Members, MemberLink
 from accounts.models import User, Organizations
 from .views import prepare_data, randomize_coordinate, get_members_by_user
 
@@ -411,3 +411,118 @@ class MemberCodeSalesRbacTest(TestCase):
             f"/api/members/sites/{self.site.pk}/", {"member_code": "FIN-001"}, format="json"
         )
         self.assertEqual(r.status_code, 400)
+
+
+class ProviderFilterTest(TestCase):
+    """T54: provider filter on /sites. Cites C41,V56."""
+
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        from rest_framework.test import APIClient
+        from .models import LinkRole
+
+        self.api = APIClient()
+        self.role, _ = LinkRole.objects.get_or_create(name="MAIN")
+
+        self.net_a = Networks.objects.create(name="NetA", network_id="NA")
+        self.net_b = Networks.objects.create(name="NetB", network_id="NB")
+        self.org_a = Organizations.objects.create(name="OrgA")
+        self.org_a.networks.add(self.net_a)
+        self.org_b = Organizations.objects.create(name="OrgB")
+        self.org_b.networks.add(self.net_b)
+
+        # Site with TWO TELKOM links — V56 duplication trap.
+        self.double = Members.objects.create(
+            name="Double", member_id="D1", network=self.net_a
+        )
+        for sid in ("S1", "S2"):
+            MemberLink.objects.create(
+                sid=sid, member=self.double, role=self.role, provider="TELKOM"
+            )
+        self.icon_site = Members.objects.create(
+            name="IconSite", member_id="I1", network=self.net_a
+        )
+        MemberLink.objects.create(
+            sid="S3", member=self.icon_site, role=self.role, provider="ICON"
+        )
+        self.bare = Members.objects.create(
+            name="Bare", member_id="B1", network=self.net_a
+        )
+        # Another org's site, provider name must not leak into org A's options.
+        self.foreign = Members.objects.create(
+            name="Foreign", member_id="F1", network=self.net_b
+        )
+        MemberLink.objects.create(
+            sid="S4", member=self.foreign, role=self.role, provider="BIZNET"
+        )
+        # Blank provider row — must never become a filter option.
+        MemberLink.objects.create(
+            sid="S5", member=self.bare, role=self.role, provider=""
+        )
+
+        self.user = User.objects.create_user(
+            username="orga", password="pass1234", organization=self.org_a
+        )
+        self.user.groups.add(Group.objects.get_or_create(name="External")[0])
+        self.api.force_authenticate(self.user)
+
+    @staticmethod
+    def _ids(response):
+        return {row["member_id"] for row in response.json()["results"]}
+
+    def test_single_provider_matches(self):
+        r = self.api.get("/api/members/sites/", {"provider": ["ICON"]})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(self._ids(r), {"I1"})
+
+    def test_two_links_same_provider_returned_once(self):
+        # V56: a bare reverse-FK join would emit D1 twice.
+        r = self.api.get("/api/members/sites/", {"provider": ["TELKOM"]})
+        self.assertEqual(r.status_code, 200)
+        rows = r.json()["results"]
+        self.assertEqual([row["member_id"] for row in rows].count("D1"), 1)
+
+    def test_providers_or_within_dimension(self):
+        r = self.api.get("/api/members/sites/", {"provider": ["TELKOM", "ICON"]})
+        self.assertEqual(self._ids(r), {"D1", "I1"})
+
+    def test_tanpa_link_selects_sites_with_no_links(self):
+        # B1 carries a blank-provider link row → it HAS a link, so the sentinel
+        # must not pick it up; membership is by row existence, not by value.
+        Members.objects.create(name="NoLinks", member_id="N1", network=self.net_a)
+        r = self.api.get("/api/members/sites/", {"provider": ["Tanpa Link"]})
+        self.assertEqual(self._ids(r), {"N1"})
+
+    def test_tanpa_link_ors_with_named_provider(self):
+        Members.objects.create(name="NoLinks", member_id="N1", network=self.net_a)
+        r = self.api.get("/api/members/sites/", {"provider": ["Tanpa Link", "ICON"]})
+        self.assertEqual(self._ids(r), {"I1", "N1"})
+
+    def test_empty_selection_is_noop(self):
+        r = self.api.get("/api/members/sites/", {"provider": []})
+        self.assertEqual(self._ids(r), {"D1", "I1", "B1"})
+
+    def test_composes_with_search(self):
+        r = self.api.get(
+            "/api/members/sites/", {"provider": ["TELKOM", "ICON"], "search": "Icon"}
+        )
+        self.assertEqual(self._ids(r), {"I1"})
+
+    def test_providers_options_scoped_to_own_org(self):
+        r = self.api.get("/api/members/sites/providers/")
+        self.assertEqual(r.status_code, 200)
+        # "Tanpa Link" sentinel always offered; BIZNET belongs to another org.
+        self.assertEqual(r.json(), ["ICON", "TELKOM", "Tanpa Link"])
+
+    def test_superuser_options_see_all_providers(self):
+        boss = User.objects.create_superuser(username="boss", password="pass1234")
+        r = self._client_for(boss).get("/api/members/sites/providers/")
+        # Blank-provider row is not an option.
+        self.assertEqual(r.json(), ["BIZNET", "ICON", "TELKOM", "Tanpa Link"])
+
+    def _client_for(self, user):
+        from rest_framework.test import APIClient
+
+        c = APIClient()
+        c.force_authenticate(user)
+        return c
