@@ -23,6 +23,7 @@ export type NavUserInfo = {
   readonly email: string;
   readonly avatar: string;
   readonly isSuperuser?: boolean;
+  readonly groups?: readonly string[];
 };
 
 export function NavUser({

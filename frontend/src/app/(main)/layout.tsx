@@ -22,18 +22,20 @@ async function getCurrentUser(): Promise<NavUserInfo> {
         username?: string;
         organization?: { name?: string } | null;
         is_superuser?: boolean;
+        groups?: string[];
       };
       return {
         name: data.username ?? "Pengguna",
         email: data.organization?.name ?? "",
         avatar: "",
         isSuperuser: data.is_superuser ?? false,
+        groups: data.groups ?? [],
       };
     }
   } catch {
     // fall through to defaults
   }
-  return { name: "Pengguna", email: "", avatar: "", isSuperuser: false };
+  return { name: "Pengguna", email: "", avatar: "", isSuperuser: false, groups: [] };
 }
 
 

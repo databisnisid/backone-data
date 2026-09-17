@@ -4,7 +4,6 @@
 *.pyc
 __pycache__
 db.sqlite3*
-media
 
 # Backup files #
 *.bak
@@ -56,7 +55,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# Python packaging dirs (anchored: unanchored `lib/` also swallowed frontend/src/lib/)
+/lib/
 lib64/
 parts/
 sdist/
@@ -139,6 +139,6 @@ GitHub.sublime-settings
 # Static
 /static
 
-# Media
+# Media (frontend/media/ = local scratch: a screenshot not referenced by any source)
 /media
-media/
+/frontend/media/

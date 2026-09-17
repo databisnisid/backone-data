@@ -14,6 +14,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { APP_CONFIG } from "@/config/app-config";
+import { EXTERNAL_HIDDEN_NAV_IDS, isExternalNavHidden } from "@/lib/nav-access";
 import { sidebarItems } from "@/navigation/sidebar/sidebar-items";
 import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
 
@@ -26,10 +27,14 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
 
 
 // T39/V41: drop the lookups nav entry unless the user is a superuser.
-function visibleItems(): typeof sidebarItems {
+// T49/V51: External / External Network also lose Quota, Networks, Pengaturan.
+function visibleItems(groups: readonly string[]): typeof sidebarItems {
+  const hidden = isExternalNavHidden(groups) ? EXTERNAL_HIDDEN_NAV_IDS : null;
   return sidebarItems.map((group) => ({
     ...group,
-    items: group.items.filter((item) => item.id !== "settings-lookups"),
+    items: group.items.filter(
+      (item) => item.id !== "settings-lookups" && !(hidden?.has(item.id) ?? false),
+    ),
   }));
 }
 
@@ -44,7 +49,7 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
 
   const variant = isSynced ? sidebarVariant : props.variant;
   const collapsible = isSynced ? sidebarCollapsible : props.collapsible;
-  const items = user.isSuperuser ? sidebarItems : visibleItems();
+  const items = user.isSuperuser ? sidebarItems : visibleItems(user.groups ?? []);
 
   return (
     <Sidebar {...props} variant={variant} collapsible={collapsible}>

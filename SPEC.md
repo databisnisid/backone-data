@@ -32,6 +32,8 @@ Rework BackOne Data into full decoupled app: Next.js frontend (React 19, App Rou
 | C33 | **Edit form field visibility** — `service_line`, `location`, `quota_string` hidden in site edit form (read-only data, no edit needed); `network` kept but shows `network_name` (read-only, always disabled); `invoice_number` scalar field added for Finance role; all fields disabled (read-only) for non-writable roles |
 | C34 | **Purchasing write scope expanded** — `project_number` added to Purchasing writable set alongside `po_file_vendor`; Purchasing can edit PO vendor + project number |
 | C35 | **Support write scope narrowed** — Support restricted to `ip_address` + `member_links` only; removed: `sdwan_package`, `baa_status_category`, `upload_baa`, `invoice_number`, `invoice_file`, `po_file_user`, `po_file_vendor`, `bap_file`, `member_code`, `notes` |
+
+| C36 | **External groups get no Quota/Networks/Pengaturan** — a user in Django Group `External` **or** `External Network` loses sidebar items `quota`, `networks`, `organizations` (title "Pengaturan") and the routes `/quota`, `/networks`, `/organizations` redirect to `/dashboard/default`. Either group wins over any other role group (hybrid `Sales`+`External` still hides); `is_superuser` wins over the group rule and always keeps all items. Menu + route only — no new API 403, `/api/*` reads stay org-filtered as today |
 | C21 | **Dismantle = derived view** of `Members.offline_at != null` — no new column/status, no migration, no drift (Q3/Q7) |
 | C22 | Dashboard aggregates ship **per `network_group`** (NetworksGroup): BAA = `upload_baa` non-null; Invoice = `invoice_number` non-null (Q7). Top Networks retained, dismantle count folds into Online/Offline cards |
 | C23 | **File upload cap 10MB / PDF,XLS,XLSX,DOC,DOCX** (existing `MAX_UPLOAD_SIZE`+`ALLOWED_UPLOAD_EXT`, already enforced in `MemberFileSerializer`) — reused, not re-added |
@@ -110,7 +112,7 @@ Keep `networks`, `networks_group`, `links`, `organizations`, `auth_user`, Django
 | Sales | org | `member_code`, `sdwan_package`, `baa_status_category`, `member_links`, `upload_baa`, `po_file_user` | PO user, BAA | yes | write-on-synced (C8) |
 | Finance | org | `invoice_number`, `invoice_file` | invoice file | yes | isolated |
 | Purchasing | org | `po_file_vendor`, `project_number` | PO vendor | yes | new group (C20) |
-| External / External Network | org (already visible) | no | BAA download | no | read-only map + sites |
+| External / External Network | org (already visible) | no | BAA download | no | read-only map + sites; sidebar omits Quota/Networks/Pengaturan and those 3 routes redirect (C36) |
 
 ### Cron
 
@@ -179,6 +181,8 @@ Domain-keyed by `Networks.domain` = `urlparse(domain_api).netloc`. Prereq: the `
 | V49 | **Sync deletion is domain-scoped** — `Networks.domain` (CharField, netloc of `sync_data()`'s `domain_api`) discriminates instances. `get_networks` seeds its delete candidate list from `Networks.objects.filter(domain=domain)` only, so an id absent from one upstream's `/api/networks/list/` can NEVER delete a network owned by another upstream. Enforced by `networks/tests.py::GetNetworksTest::test_sync_of_one_domain_never_deletes_another_domains_networks` |
 | V50 | **Cron runs image code, never a volume shadow** — no service may bind/volume-mount `/app` of the `backone-data` image; the crontab lives at `/etc/crontabs/root` inside the image, so a code fix reaches cron only when the crond service references the fixed image AND nothing shadows `/app`. Known ceiling: same-domain network removal still cascades to that domain's `Members` (retained `on_delete=CASCADE`), so V3 holds only cross-domain — see B5 |
 
+| V51 | **External/External-Network nav hide is plumbed end to end** — `getCurrentUser()` (`(main)/layout.tsx`) passes `groups` from `/api/auth/me/` into `NavUserInfo`; `visibleItems()` in `app-sidebar.tsx` drops ids `quota`/`networks`/`organizations` when `groups` contains `External` or `External Network`, after the `is_superuser` branch; the three routes redirect to `/dashboard/default` under the same predicate, mirroring the V41 lookups gate. Rule is deny-only, never a grant — a group list never unlocks an item. FE gate is cosmetic: DRF read permissions and org-filtering are unchanged (C36) |
+
 | ID | Status | Task | Cites |
 |---|---|---|---|
 | T1 | ✅ | Backend: deps `djangorestframework-simplejwt==5.5.1` + `drf-spectacular==0.30.0` in requirements.txt; wire SimpleJWT auth + Swagger/OpenAPI (`/api/schema/`, `/api/docs/`) | C3 |
@@ -208,6 +212,8 @@ Domain-keyed by `Networks.domain` = `urlparse(domain_api).netloc`. Prereq: the `
 | T46 | ✅ | Backend: updated `members/rbac.py` — narrowed `WRITE_BY_ROLE["Support"]` to `{"ip_address", "member_links"}`; expanded `WRITE_BY_ROLE["Purchasing"]` to `{"po_file_vendor", "project_number"}`; expanded `WRITE_BY_ROLE["Sales"]` to add `{"sdwan_package", "po_file_user"}`; added `project_number` to `READ_EXTRA_BY_ROLE["Purchasing"]` (V46,V47,V48) | V46,V47,V48 |
 | T47 | ✅ | FE: updated `WRITE_BY_ROLE` in `data.ts` — Support: `{"ip_address","member_links"}`; Purchasing: `{"po_file_vendor","project_number"}`; Sales: added `{"sdwan_package","po_file_user"}`; `writableFieldSet()` + `isFieldWritable()` automatically reflect changes | V46,V47,V48 |
 | T48 | ✅ | Multi-domain sync: add `Networks.domain` (CharField 100, `default=''`) + migration `networks.0004` (AddField + RunPython backfill `''`→`manage.backone.cloud`); `get_networks` keys `_netloc(domain_api)` and scopes the delete list to `filter(domain=domain)`; restore VN cron line in `dockerize/cronjobs`; remove the `backone-data-app` volume mount from `backone-data-crond` (it shadowed `/app` with 2025-10-27 code). Verified: 59 tests OK; `makemigrations --check` no changes; deployed by digest; live VN sync 1207→1228 members / 26→45 networks with bc=26 intact; ping-pong both directions zero deletions; real 11:00 cron tick ran both lines clean | C15,V49,V50 |
+
+| T49 | ✅ | FE: hide Quota/Networks/Pengaturan for `External` + `External Network` — added `nav-access.ts` (`isExternalNavHidden`), `groups` on `NavUserInfo` populated in `(main)/layout.tsx::getCurrentUser()`, `getMeAccess()` in `lib/auth.ts`, `visibleItems(groups)` in `app-sidebar.tsx` (keeps the `settings-lookups` rule, superuser branch first), `redirect("/dashboard/default")` guards in `quota/page.tsx` / `networks/page.tsx` / `organizations/page.tsx`. Verified in-browser: `External` + `External Network` + `External`+`Sales` hybrid → sidebar only Dashboard+Sites, all 3 routes → `/dashboard/default`, `/sites` unaffected; `Sales`-only + superuser → 3 routes 200 and menus intact, superuser keeps `/settings/lookups`; `npm run build` exit 0 | C36,V51 |
 
 | T25 | ✅ | FE: file upload UI for feature files on synced sites (PO user / PO vendor / invoice) → BFF multipart → Django upload; size/ext errors surface (10MB, PDF/XLS/XLSX/DOC/DOCX) | C23,T13,V20 |
 
