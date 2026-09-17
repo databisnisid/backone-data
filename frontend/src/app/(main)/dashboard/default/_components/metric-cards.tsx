@@ -3,10 +3,13 @@
 import { useState } from "react";
 
 import { Globe, HardDrive, Wifi, WifiOff } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Cell, Pie, PieChart } from "recharts";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 
 type Stats = {
   total_sites: number;
@@ -17,6 +20,9 @@ type Stats = {
   // T57/C51: provider rows are DISTINCT-site counts; "Tanpa Link" is the
   // full-role-set complement, so it partitions `total_sites` exactly.
   provider_breakdown: Array<{ provider: string; count: number }>;
+  // C58/V61: distinct-site counts per SDWAN package over the ACTIVE scope, so
+  // the slices partition `online_sites` exactly.
+  sdwan_breakdown: Array<{ package: string; count: number }>;
 };
 
 let statsPromise: Promise<Stats> | null = null;
@@ -217,4 +223,134 @@ export function ProviderBreakdown() {
       </CardContent>
     </Card>
   );
+}
+
+// C58: package names are not sensitive (External already reads every one of
+// them per-row in the grid's `layanan` column), so unlike the provider panel
+// this card is NOT behind the C43/C49 internal-only gate.
+export function SdwanBreakdown() {
+  const router = useRouter();
+  const [stats, setStats] = useState<Stats | null>(null);
+
+  useState(() => {
+    void fetchStats()
+      .then(setStats)
+      .catch((e) => toast.error((e as Error).message));
+  });
+
+  const rows = stats?.sdwan_breakdown ?? [];
+  // V61: every site carries exactly one package (single-valued FK, NULLs
+  // backfilled by C59), so the slices partition the active set exactly.
+  const total = rows.reduce((sum, r) => sum + r.count, 0);
+  const data = rows.map((r, i) => ({
+    ...r,
+    fill: `var(--chart-${(i % 5) + 1})`,
+  }));
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Paket SDWAN</CardTitle>
+        <CardDescription>Paket layanan per titik aktif</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {!stats && <p className="text-muted-foreground text-sm">Loading…</p>}
+        {stats && rows.length === 0 && (
+          <p className="text-muted-foreground text-sm">Tidak ada data paket.</p>
+        )}
+        {rows.length > 0 && (
+          <>
+            <ChartContainer
+              config={{}}
+              className="mx-auto aspect-square max-h-56 w-full"
+            >
+              <PieChart>
+                <ChartTooltip
+                  content={
+                    <ChartTooltipContent
+                      nameKey="package"
+                      hideLabel
+                      formatter={(value, name) => (
+                        <span className="flex w-full items-center justify-between gap-4">
+                          <span className="truncate">{name}</span>
+                          <span className="text-muted-foreground tabular-nums">
+                            {Number(value).toLocaleString("id-ID")} (
+                            {share(Number(value), total).toLocaleString("id-ID", {
+                              maximumFractionDigits: 1,
+                            })}
+                            %)
+                          </span>
+                        </span>
+                      )}
+                    />
+                  }
+                />
+                {/* C58: minAngle keeps a sub-1% package a visible wedge; the
+                    legend and tooltip print the true count and share so the
+                    inflation is disclosed rather than hidden. */}
+                <Pie
+                  data={data}
+                  dataKey="count"
+                  nameKey="package"
+                  minAngle={4}
+                  onClick={(_, index) => {
+                    const name = data[index]?.package;
+                    if (name) {
+                      router.push(
+                        `/sites?sdwan=${encodeURIComponent(name)}&status=active`,
+                      );
+                    }
+                  }}
+                >
+                  {data.map((d) => (
+                    <Cell key={d.package} fill={d.fill} className="cursor-pointer" />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ChartContainer>
+            <ul className="mt-2 space-y-1">
+              {data.map((d) => (
+                <li key={d.package}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      router.push(
+                        `/sites?sdwan=${encodeURIComponent(d.package)}&status=active`,
+                      )
+                    }
+                    className="flex w-full items-center justify-between gap-2 text-left text-sm hover:underline"
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span
+                        aria-hidden
+                        className="size-2.5 shrink-0 rounded-xs"
+                        style={{ background: d.fill }}
+                      />
+                      <span className="truncate font-medium">{d.package}</span>
+                    </span>
+                    <span className="text-muted-foreground shrink-0 tabular-nums">
+                      {d.count.toLocaleString("id-ID")} (
+                      {share(d.count, total).toLocaleString("id-ID", {
+                        maximumFractionDigits: 1,
+                      })}
+                      %)
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        {stats && rows.length > 0 && (
+          <Badge variant="secondary" className="mt-2">
+            {total.toLocaleString("id-ID")} titik berpaket
+          </Badge>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function share(count: number, total: number): number {
+  return total ? (count / total) * 100 : 0;
 }

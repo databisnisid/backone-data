@@ -15,11 +15,16 @@ export async function fetchSites(params: {
   page: number;
   search?: string;
   providers?: string[];
+  // V62: slice links carry these, so the grid's count matches the pie slice.
+  sdwan?: string;
+  status?: string;
 }) {
   const q = new URLSearchParams();
   q.set("page", String(params.page));
   if (params.search) q.set("search", params.search);
   for (const p of params.providers ?? []) q.append("provider", p);
+  if (params.sdwan) q.set("sdwan", params.sdwan);
+  if (params.status) q.set("status", params.status);
   const res = await fetch(`/api/backend/members/sites?${q.toString()}`);
   return jsonOrThrow<Page<SiteRow>>(res);
 }
@@ -77,6 +82,8 @@ export async function fetchLinkServices() {
 }
 export type MemberOptions = {
   sdwan_package: string[];
+  // C59: server-declared default package name the create dialog preselects.
+  default_sdwan_package: string;
   baa_status_category: string[];
   role: string[];
 };

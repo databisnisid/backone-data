@@ -13,7 +13,14 @@ from .models import Members, MemberLink
 from .serializers import MemberSerializer, MemberFileSerializer, MemberLinkSerializer
 from .rbac import readable_fields, writable_fields, sees_all_sites
 from rest_framework.permissions import BasePermission
-from .models import Members, MemberLink, SdwanPackage, BaaStatus, LinkRole
+from .models import (
+    BaaStatus,
+    DEFAULT_SDWAN_PACKAGE,
+    LinkRole,
+    MemberLink,
+    Members,
+    SdwanPackage,
+)
 
 
 class IsSuperUser(BasePermission):
@@ -169,6 +176,35 @@ def provider_breakdown(qs):
     rows.append({"provider": NO_LINK, "count": qs.count() - linked})
     return rows
 
+def sdwan_breakdown(qs):
+    """Distinct-site counts per SDWAN package over the viewer's ACTIVE scope (C58/V61).
+
+    sdwan_package is a forward FK, single-valued per site, so a plain grouping
+    partitions the active set exactly — no DISTINCT-site hazard like the
+    reverse-FK link join in V56, and no complement row is needed because C59
+    backfills every NULL onto the `Tanpa SDWAN` row.
+    """
+    return [
+        {"package": row["sdwan_package__name"], "count": row["n"]}
+        for row in active_members_queryset(qs)
+        .exclude(sdwan_package__isnull=True)
+        .values("sdwan_package__name")
+        .annotate(n=Count("id", distinct=True))
+        .order_by("-n", "sdwan_package__name")
+    ]
+
+
+def apply_sdwan_filter(qs, package):
+    """?sdwan=<name> on the sites list — C58, V62.
+
+    Exact match on the package name, composing with the other filters rather
+    than replacing them. A blank value is a no-op (mirroring V56); an unknown
+    name legitimately returns an empty grid.
+    """
+    if not package:
+        return qs
+    return qs.filter(sdwan_package__name=package)
+
 
 class SitesViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
@@ -187,6 +223,7 @@ class SitesViewSet(viewsets.ModelViewSet):
             if nets:
                 qs = qs.filter(network_id__in=nets)
             qs = apply_provider_filter(qs, self.request.query_params.getlist("provider"))
+            qs = apply_sdwan_filter(qs, self.request.query_params.get("sdwan"))
         return qs
 
     def create(self, request, *args, **kwargs):
@@ -268,6 +305,7 @@ class SitesViewSet(viewsets.ModelViewSet):
                     for g in groups
                 ],
                 "provider_breakdown": provider_breakdown(qs),
+                "sdwan_breakdown": sdwan_breakdown(qs),
             }
         )
     @action(detail=False, methods=["get"], url_path="options")
@@ -280,6 +318,8 @@ class SitesViewSet(viewsets.ModelViewSet):
                 "sdwan_package": list(
                     SdwanPackage.objects.order_by("name").values_list("name", flat=True)
                 ),
+                # C59: the FE preselects this instead of hardcoding the name.
+                "default_sdwan_package": DEFAULT_SDWAN_PACKAGE,
                 "baa_status_category": list(
                     BaaStatus.objects.order_by("name").values_list("name", flat=True)
                 ),

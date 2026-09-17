@@ -4,7 +4,7 @@ from django.utils import timezone
 from django.conf import settings
 from datetime import timedelta
 from networks.models import Networks
-from .models import Members, MemberLink
+from .models import Members, MemberLink, SdwanPackage
 from accounts.models import User, Organizations
 from .views import prepare_data, randomize_coordinate, get_members_by_user
 
@@ -772,3 +772,137 @@ class SitesStatusScopeTest(TestCase):
         ids = {str(c.value) for row in ws.iter_rows() for c in row}
         self.assertNotIn("SIAB9101", ids)
         self.assertIn("SIAB9102", ids)
+
+
+class SdwanBreakdownTest(TestCase):
+    """T59: SDWAN package breakdown for the dashboard pie. Cites C58,C59,V61."""
+
+    def setUp(self):
+        from rest_framework.test import APIClient
+
+        self.api = APIClient()
+        self.lite, _ = SdwanPackage.objects.get_or_create(name="BackOne - SDWAN Lite")
+        self.pro, _ = SdwanPackage.objects.get_or_create(name="BackOne - SDWAN Pro")
+        self.net = Networks.objects.create(name="NetD", network_id="ND")
+        self.org = Organizations.objects.create(name="OrgD")
+        self.org.networks.add(self.net)
+        yesterday = timezone.now() - timedelta(days=1)
+
+        self.l1 = Members.objects.create(
+            name="LiteActive", member_id="L1", network=self.net, sdwan_package=self.lite
+        )
+        Members.objects.create(
+            name="LiteOld",
+            member_id="L2",
+            network=self.net,
+            sdwan_package=self.lite,
+            offline_at=yesterday,
+        )
+        Members.objects.create(
+            name="ProActive", member_id="P1", network=self.net, sdwan_package=self.pro
+        )
+        # No package passed → C59 default lands it on the Tanpa SDWAN row.
+        self.bare = Members.objects.create(name="Bare", member_id="B1", network=self.net)
+
+        # Another org's site on the SAME package must not leak into the pie.
+        other_net = Networks.objects.create(name="NetOther", network_id="NO")
+        other_org = Organizations.objects.create(name="OrgOther")
+        other_org.networks.add(other_net)
+        Members.objects.create(
+            name="Foreign", member_id="F1", network=other_net, sdwan_package=self.lite
+        )
+
+        self.user = User.objects.create_user(
+            username="sdwan", password="pass1234", organization=self.org
+        )
+        self.api.force_authenticate(self.user)
+
+    def _stats(self):
+        r = self.api.get("/api/members/sites/stats/")
+        self.assertEqual(r.status_code, 200)
+        return r.json()
+
+    def _rows(self):
+        return {x["package"]: x["count"] for x in self._stats()["sdwan_breakdown"]}
+
+    def _ids(self, **params):
+        r = self.api.get("/api/members/sites/", params)
+        self.assertEqual(r.status_code, 200)
+        return {row["member_id"] for row in r.json()["results"]}
+
+    def test_null_package_defaults_to_tanpa_sdwan(self):
+        # C59: the model default resolves the row by name, no NULL survives.
+        self.assertEqual(self.bare.sdwan_package.name, "BackOne - Tanpa SDWAN")
+
+    def test_slices_partition_the_active_set_exactly(self):
+        stats = self._stats()
+        rows = {x["package"]: x["count"] for x in stats["sdwan_breakdown"]}
+        self.assertEqual(
+            rows,
+            {"BackOne - SDWAN Lite": 1, "BackOne - SDWAN Pro": 1, "BackOne - Tanpa SDWAN": 1},
+        )
+        self.assertEqual(sum(rows.values()), stats["online_sites"])
+        # V61: pie total is the ACTIVE count, hence below the full role set.
+        self.assertEqual(stats["online_sites"], 3)
+        self.assertEqual(stats["total_sites"], 4)
+
+    def test_dismantled_site_excluded_and_scoped_to_own_org(self):
+        rows = self._rows()
+        self.assertEqual(rows["BackOne - SDWAN Lite"], 1)  # L2 and F1 both absent
+        self.assertNotIn("Foreign", rows)
+
+    def test_sdwan_filter_is_exact_match_and_composes(self):
+        # Bare grid spans all statuses (C52) → both Lite sites.
+        self.assertEqual(self._ids(sdwan="BackOne - SDWAN Lite"), {"L1", "L2"})
+        # V62: the slice link narrows to active so the count matches the pie.
+        self.assertEqual(
+            self._ids(sdwan="BackOne - SDWAN Lite", status="active"), {"L1"}
+        )
+        # Composes with search rather than replacing it (V56's rule).
+        self.assertEqual(self._ids(sdwan="BackOne - SDWAN Lite", search="ProActive"), set())
+
+    def test_unknown_sdwan_value_yields_empty_grid(self):
+        self.assertEqual(self._ids(sdwan="BackOne - Nope"), set())
+
+    def test_blank_sdwan_is_a_noop(self):
+        self.assertEqual(self._ids(sdwan=""), {"L1", "L2", "P1", "B1"})
+
+    def test_create_via_api_without_package_lands_on_default(self):
+        # C59/V61: the FE omits the key when nothing is selected, so the model
+        # default must apply — an explicit null would recreate a NULL row.
+        # Create is Support/superuser-only (sees_all_sites), so re-auth the
+        # setUp client for this test alone.
+        boss = User.objects.create_superuser(username="boss3", password="pass1234")
+        self.api.force_authenticate(boss)
+        r = self.api.post(
+            "/api/members/sites/",
+            {"name": "Fresh", "member_id": "FR1", "network": self.net.pk},
+            format="json",
+        )
+        self.assertEqual(r.status_code, 201)
+        self.assertEqual(
+            Members.objects.get(member_id="FR1").sdwan_package.name,
+            "BackOne - Tanpa SDWAN",
+        )
+
+    def test_backfill_migration_moves_nulls_to_tanpa_sdwan(self):
+        # C59: exercise the migration's own function over prod-shaped NULLs, so
+        # the backfill predicate stays proven independently of the model default.
+        from django.apps import apps as global_apps
+        from importlib import import_module
+
+        backfill = import_module(
+            "members.migrations.0014_members_sdwan_package_default"
+        ).backfill_null_sdwan
+
+        nulled = Members.objects.filter(member_id__in=["L1", "P1"])
+        nulled.update(sdwan_package=None)
+        self.assertEqual(Members.objects.filter(sdwan_package__isnull=True).count(), 2)
+
+        backfill(global_apps, None)
+
+        self.assertEqual(Members.objects.filter(sdwan_package__isnull=True).count(), 0)
+        self.assertEqual(
+            Members.objects.get(member_id="L1").sdwan_package.name,
+            "BackOne - Tanpa SDWAN",
+        )

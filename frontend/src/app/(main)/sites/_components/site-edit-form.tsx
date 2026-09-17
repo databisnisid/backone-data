@@ -79,16 +79,19 @@ function useLinkServices(me: Me): { id: number; name: string }[] {
   return services;
 }
 
+const EMPTY_OPTIONS: MemberOptions = {
+  sdwan_package: [],
+  default_sdwan_package: "",
+  baa_status_category: [],
+  role: [],
+};
+
 function useMemberOptions(): MemberOptions {
-  const [options, setOptions] = React.useState<MemberOptions>({
-    sdwan_package: [],
-    baa_status_category: [],
-    role: [],
-  });
+  const [options, setOptions] = React.useState<MemberOptions>(EMPTY_OPTIONS);
   React.useEffect(() => {
     fetchMemberOptions()
       .then(setOptions)
-      .catch(() => setOptions({ sdwan_package: [], baa_status_category: [], role: [] }));
+      .catch(() => setOptions(EMPTY_OPTIONS));
   }, []);
   return options;
 }

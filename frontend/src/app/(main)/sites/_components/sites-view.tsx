@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { ChevronDown, Download, Plus, Search, X } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -179,6 +180,12 @@ export function SitesView() {
   const [page, setPage] = React.useState(1);
   const [search, setSearch] = React.useState("");
   const [providers, setProviders] = React.useState<string[]>([]);
+  // V62: slice links land here as `/sites?sdwan=<name>&status=active`. Seeded
+  // once from the URL and never written back — `status` stays URL-only, so no
+  // visible status control returns (C52).
+  const searchParams = useSearchParams();
+  const [sdwan] = React.useState(() => searchParams.get("sdwan") ?? "");
+  const [status] = React.useState(() => searchParams.get("status") ?? "");
   const [providerOptions, setProviderOptions] = React.useState<string[]>([]);
   const [editingId, setEditingId] = React.useState<number | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -199,7 +206,7 @@ export function SitesView() {
   const load = React.useCallback(async () => {
     setLoading(true);
     try {
-      const data = await fetchSites({ page, search, providers });
+      const data = await fetchSites({ page, search, providers, sdwan, status });
       setRows(data.results);
       setTotal(data.count);
     } catch (e) {
@@ -207,7 +214,7 @@ export function SitesView() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, providers]);
+  }, [page, search, providers, sdwan, status]);
 
   React.useEffect(() => {
     void load();

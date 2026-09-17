@@ -1,7 +1,12 @@
 import { getMeAccess } from "@/lib/auth";
 import { isExternalNavHidden } from "@/lib/nav-access";
 
-import { MetricCards, ProviderBreakdown, TopNetworks } from "./_components/metric-cards";
+import {
+  MetricCards,
+  ProviderBreakdown,
+  SdwanBreakdown,
+  TopNetworks,
+} from "./_components/metric-cards";
 import { StatusOverview } from "./_components/status-overview";
 
 export default async function Page() {
@@ -19,6 +24,9 @@ export default async function Page() {
         </div>
         <TopNetworks />
         {showProviders && <ProviderBreakdown />}
+        {/* C58: deliberately outside the C43/C49 gate — External already reads
+            every package name per-row in the grid, so the pie leaks nothing. */}
+        <SdwanBreakdown />
       </div>
     </div>
   );

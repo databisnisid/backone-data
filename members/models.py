@@ -25,6 +25,24 @@ class SdwanPackage(models.Model):
         return "%s" % self.name
 
 
+DEFAULT_SDWAN_PACKAGE = "BackOne - Tanpa SDWAN"
+
+
+def default_sdwan_package_id():
+    """PK of the `Tanpa SDWAN` row, resolved BY NAME (C59).
+
+    Never a hardcoded pk: prod ids are DB-generated. Returns None if the row is
+    absent so `migrate` on a fresh DB and the reverse migration stay safe. Kept
+    as a callable (not `default=<pk>`) for exactly that reason — callables are
+    evaluated per insert and never baked into the schema.
+    """
+    return (
+        SdwanPackage.objects.filter(name=DEFAULT_SDWAN_PACKAGE)
+        .values_list("pk", flat=True)
+        .first()
+    )
+
+
 class BaaStatus(models.Model):
     """Lookup: BAA status category options (C24). Backs Members.baa_status_category FK."""
 
@@ -105,6 +123,7 @@ class Members(ClusterableModel):
         verbose_name=_("SDWAN Package"),
         blank=True,
         null=True,
+        default=default_sdwan_package_id,
     )
     project_number = models.CharField(
         _("Project Number"), max_length=50, blank=True, null=True

@@ -23,6 +23,7 @@ import { type NetworkOption } from "./data";
 export function CreateSiteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const [networks, setNetworks] = React.useState<NetworkOption[]>([]);
   const [sdwanOptions, setSdwanOptions] = React.useState<string[]>([]);
+  const [defaultSdwan, setDefaultSdwan] = React.useState("");
   const [name, setName] = React.useState("");
   const [memberId, setMemberId] = React.useState("");
   const [address, setAddress] = React.useState("");
@@ -36,7 +37,15 @@ export function CreateSiteDialog({ open, onOpenChange }: { open: boolean; onOpen
         .then(setNetworks)
         .catch((e) => toast.error(e.message));
       fetchMemberOptions()
-        .then((o) => setSdwanOptions(o.sdwan_package))
+        .then((o) => {
+          setSdwanOptions(o.sdwan_package);
+          // C59: preselect the server-declared default so a new site lands on
+          // `Tanpa SDWAN` instead of NULL.
+          if (o.default_sdwan_package) {
+            setDefaultSdwan(o.default_sdwan_package);
+            setSdwan(o.default_sdwan_package);
+          }
+        })
         .catch(() => setSdwanOptions([]));
     }
   }, [open]);
@@ -45,7 +54,8 @@ export function CreateSiteDialog({ open, onOpenChange }: { open: boolean; onOpen
     setName("");
     setMemberId("");
     setAddress("");
-    setSdwan("");
+    // C59: reset to the same default, not to blank.
+    setSdwan(defaultSdwan);
     setNetwork("");
     setProject("");
   }
@@ -61,7 +71,9 @@ export function CreateSiteDialog({ open, onOpenChange }: { open: boolean; onOpen
         name,
         member_id: memberId,
         address: address || null,
-        sdwan_package: sdwan || null,
+        // C59: omit rather than send `null` — an explicit null bypasses the
+        // model default and would recreate the NULL rows the backfill removed.
+        ...(sdwan ? { sdwan_package: sdwan } : {}),
         project_number: project || null,
         network: network ? Number(network) : null,
       });
