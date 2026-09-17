@@ -32,7 +32,13 @@ async function proxy(req: Request, _ctx: Ctx, method: string): Promise<NextRespo
   const resHeaders = new Headers(res.headers);
   resHeaders.delete("set-cookie");
   const data = await res.arrayBuffer();
-  return new NextResponse(data, { status: res.status, headers: resHeaders });
+  // A 204/304 from Django carries no body, and `new Response(body, {status:204})`
+  // throws ("Invalid response status code 204") — which 500s a DELETE that
+  // actually SUCCEEDED, leaving the row on screen so the retry hits a dead id.
+  return new NextResponse(data.byteLength ? data : null, {
+    status: res.status,
+    headers: resHeaders,
+  });
 }
 
 export async function GET(req: Request, ctx: Ctx) {
