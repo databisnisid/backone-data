@@ -14,7 +14,8 @@ type Stats = {
   offline_sites: number;
   manual_sites: number;
   top_networks: Array<{ name: string; sites: number }>;
-  // T55/C44: link-row counts per provider; last row is the "Tanpa Link" sentinel.
+  // T57/C51: provider rows are DISTINCT-site counts; "Tanpa Link" is the
+  // full-role-set complement, so it partitions `total_sites` exactly.
   provider_breakdown: Array<{ provider: string; count: number }>;
 };
 
@@ -169,7 +170,11 @@ export function ProviderBreakdown() {
   // small real providers stay legible next to the dominant "Tanpa Link" row.
   const rows = stats?.provider_breakdown ?? [];
   const shown = rows.reduce((sum, r) => sum + r.count, 0);
-  const totalLinks = shown - (rows.find((r) => r.provider === "Tanpa Link")?.count ?? 0);
+  // T57/V59: Tanpa Link complements the full role set, so this is the DISTINCT
+  // site count — summing the provider rows would double-count a site holding
+  // two providers (site 3705 read "2 titik berprovider" for one site).
+  const noLink = rows.find((r) => r.provider === "Tanpa Link")?.count ?? 0;
+  const totalLinks = stats ? stats.total_sites - noLink : 0;
 
   return (
     <Card>

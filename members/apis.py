@@ -139,28 +139,34 @@ def apply_provider_filter(qs, providers):
 
 
 def provider_breakdown(qs):
-    """Link-row counts per provider over an already-scoped queryset (C44/C45/V57).
+    """Distinct-site counts per provider over the viewer's role scope (C51/V57).
 
-    Counts MemberLink ROWS, not sites: a site with two links from the same
-    provider contributes 2 (C44). Blank/null providers are excluded, matching
-    link_providers(), so the panel and the C41 dropdown agree on what a name is.
-    The `Tanpa Link` row is the ~Exists complement over the same qs — never
-    filter(member_links__isnull=True) — so a linked site is never also counted
-    as having none (V57).
+    Named rows count DISTINCT ACTIVE sites (C50/V58): a site holding two links
+    from the same provider counts once, and a dismantled site contributes no
+    current provider — both match the `/sites` grid and its T54/V56 filter.
+    Blank/null providers are excluded, matching link_providers(), so the panel
+    and the C41 dropdown agree on what a name is.
+
+    `Tanpa Link` is the complement against the FULL role set (V59), so the
+    panel partitions the `Total Situs` card: a dismantled site holds no current
+    link, hence no provider, hence no link. Never
+    filter(member_links__isnull=True) — that join double-counts a site with
+    several links (V57).
     """
+    active = active_members_queryset(qs)
     rows = [
         {"provider": row["provider"], "count": row["n"]}
-        for row in MemberLink.objects.filter(member__in=qs)
+        for row in MemberLink.objects.filter(member__in=active)
         .exclude(provider__isnull=True)
         .exclude(provider="")
         .values("provider")
-        .annotate(n=Count("id"))
+        .annotate(n=Count("member", distinct=True))
         .order_by("-n", "provider")
     ]
-    unlinked = qs.filter(
-        ~Exists(MemberLink.objects.filter(member=OuterRef("pk")))
+    linked = active.filter(
+        Exists(MemberLink.objects.filter(member=OuterRef("pk")))
     ).count()
-    rows.append({"provider": NO_LINK, "count": unlinked})
+    rows.append({"provider": NO_LINK, "count": qs.count() - linked})
     return rows
 
 
@@ -222,7 +228,7 @@ class SitesViewSet(viewsets.ModelViewSet):
         qs = member_queryset_for(request.user)
         now = timezone.now()
         total = qs.count()
-        online = qs.filter(Q(offline_at__isnull=True) | Q(offline_at__gt=now)).count()
+        online = active_members_queryset(qs).count()
         offline = total - online
         manual = qs.filter(is_manual=True).count()
         nets = (
@@ -261,7 +267,7 @@ class SitesViewSet(viewsets.ModelViewSet):
                     }
                     for g in groups
                 ],
-                "provider_breakdown": provider_breakdown(active_members_queryset(qs)),
+                "provider_breakdown": provider_breakdown(qs),
             }
         )
     @action(detail=False, methods=["get"], url_path="options")

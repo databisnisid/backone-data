@@ -546,8 +546,8 @@ class ProviderBreakdownTest(TestCase):
         self.org_b = Organizations.objects.create(name="OrgB")
         self.org_b.networks.add(self.net_b)
 
-        # Two links on ONE site: C44 counts rows, so TELKOM must read 2 here
-        # even though it would read 1 as a distinct-site count (V56).
+        # Two links on ONE site: B8 counts distinct SITES per provider, so
+        # TELKOM reads 1 for `double` despite 2 link rows (V56/T54 agree).
         self.double = Members.objects.create(
             name="Double", member_id="D1", network=self.net_a
         )
@@ -561,6 +561,18 @@ class ProviderBreakdownTest(TestCase):
         MemberLink.objects.create(
             sid="S3", member=self.icon_site, role=self.role, provider="ICON"
         )
+        # One site holding BOTH providers — the prod shape (B8) whose two
+        # links the footer "titik berprovider" must collapse to one site.
+        self.mixed = Members.objects.create(
+            name="Mixed", member_id="M1", network=self.net_a
+        )
+        for provider in ("ICON", "TELKOM"):
+            MemberLink.objects.create(
+                sid=f"M-{provider}",
+                member=self.mixed,
+                role=self.role,
+                provider=provider,
+            )
         # No link at all -> the Tanpa Link row.
         self.bare = Members.objects.create(
             name="Bare", member_id="B1", network=self.net_a
@@ -587,20 +599,23 @@ class ProviderBreakdownTest(TestCase):
         self.assertEqual(r.status_code, 200)
         return r.json()["provider_breakdown"]
 
-    def test_counts_link_rows_not_distinct_sites(self):
-        # The site holding two TELKOM links contributes 2 (C44), unlike the
-        # /sites filter which collapses it to one (V56).
+    def test_counts_distinct_sites_not_link_rows(self):
+        # B8: distinct SITES per provider. `double` holds two TELKOM links and
+        # counts once (V56/T54 agree); `mixed` holds ICON+TELKOM and counts
+        # once under each name.
         rows = {r["provider"]: r["count"] for r in self._rows()}
-        self.assertEqual(rows["TELKOM"], 2)
-        self.assertEqual(rows["ICON"], 1)
+        self.assertEqual(rows["TELKOM"], 2)  # double + mixed, not 3 rows
+        self.assertEqual(rows["ICON"], 2)  # icon_site + mixed
 
     def test_unlinked_row_is_the_complement_not_a_null_join(self):
+        # Partition over org A: 4 sites - 3 carrying a link = 1 bare site.
         rows = {r["provider"]: r["count"] for r in self._rows()}
         self.assertEqual(rows["Tanpa Link"], 1)
 
     def test_providers_descending_and_no_link_pinned_last(self):
         rows = self._rows()
-        self.assertEqual([r["provider"] for r in rows], ["TELKOM", "ICON", "Tanpa Link"])
+        # Both names tie at 2, so provider ascending breaks it (C47).
+        self.assertEqual([r["provider"] for r in rows], ["ICON", "TELKOM", "Tanpa Link"])
 
     def test_scoped_to_own_org(self):
         names = [r["provider"] for r in self._rows()]
@@ -611,6 +626,7 @@ class ProviderBreakdownTest(TestCase):
         rows = {r["provider"]: r["count"] for r in self._rows(boss)}
         self.assertEqual(rows["BIZNET"], 1)
         self.assertEqual(rows["TELKOM"], 2)
+        self.assertEqual(rows["ICON"], 2)
 
     def _client_for(self, user):
         from rest_framework.test import APIClient
@@ -621,11 +637,13 @@ class ProviderBreakdownTest(TestCase):
 
 
 class ProviderBreakdownStatusTest(TestCase):
-    """B7: the panel counts ACTIVE sites only, matching the /sites grid default.
+    """B7+T57: named provider rows count ACTIVE sites only (matching the
+    `/sites` grid default) while `Tanpa Link` is the complement against the
+    FULL role set, so it agrees with the `Total Situs` card.
 
-    Cites C50,V58. Prod shape: the site holding the provider links is
-    DISMANTLED while an active namesake holds none, so the full role set
-    read TELKOM=2/ICON=2 where /sites showed 1/1.
+    Cites C50,V58,V59. Prod shape: a dismantled site holding provider links
+    while an active namesake holds none, so the full role set read
+    TELKOM=2/ICON=2 where /sites showed 1/1.
     """
 
     def setUp(self):
@@ -679,7 +697,8 @@ class ProviderBreakdownStatusTest(TestCase):
         self.assertEqual(rows["TELKOM"], 1)
         self.assertEqual(rows["ICON"], 1)
 
-    def test_dismantled_bare_site_is_not_counted_as_tanpa_link(self):
-        # The complement must use the same active scope, so only BareActive
-        # lands in Tanpa Link (the full set would report 2).
-        self.assertEqual(self._rows()["Tanpa Link"], 1)
+    def test_dismantled_site_without_links_lands_in_tanpa_link(self):
+        # T57: a dismantled site holds no CURRENT link, so it has no provider
+        # and belongs to the complement. Only `new` (active + linked) is
+        # excluded, so 4 sites - 1 = 3.
+        self.assertEqual(self._rows()["Tanpa Link"], 3)
