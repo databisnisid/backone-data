@@ -14,6 +14,8 @@ type Stats = {
   offline_sites: number;
   manual_sites: number;
   top_networks: Array<{ name: string; sites: number }>;
+  // T55/C44: link-row counts per provider; last row is the "Tanpa Link" sentinel.
+  provider_breakdown: Array<{ provider: string; count: number }>;
 };
 
 let statsPromise: Promise<Stats> | null = null;
@@ -147,6 +149,64 @@ export function TopNetworks() {
         {stats && (
           <Badge variant="secondary" className="mt-2">
             {stats.total_sites.toLocaleString("id-ID")} situs total
+          </Badge>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+export function ProviderBreakdown() {
+  const [stats, setStats] = useState<Stats | null>(null);
+
+  useState(() => {
+    void fetchStats()
+      .then(setStats)
+      .catch((e) => toast.error((e as Error).message));
+  });
+
+  // C46: bars scale to the summed displayed rows, so they total 100% and the
+  // small real providers stay legible next to the dominant "Tanpa Link" row.
+  const rows = stats?.provider_breakdown ?? [];
+  const shown = rows.reduce((sum, r) => sum + r.count, 0);
+  const totalLinks = shown - (rows.find((r) => r.provider === "Tanpa Link")?.count ?? 0);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Provider</CardTitle>
+        <CardDescription>Provider yang dipakai dan jumlah titik</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {!stats && <p className="text-muted-foreground text-sm">Loading…</p>}
+        {stats && rows.length === 0 && (
+          <p className="text-muted-foreground text-sm">Tidak ada data provider.</p>
+        )}
+        {/* Server already orders providers desc and pins "Tanpa Link" last (C47). */}
+        {rows.map((p) => {
+          const share = shown ? (p.count / shown) * 100 : 0;
+          // C46: one decimal, so a small real provider never rounds to a bare
+          // "0%" (which reads as absent), and a nonzero bar keeps a floor of 1%
+          // so it stays visible beside the dominant "Tanpa Link" row.
+          const pct = share > 0 && share < 0.1 ? 0.1 : share;
+          const barWidth = p.count > 0 ? Math.max(share, 1) : 0;
+          return (
+            <div key={p.provider} className="space-y-1">
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="truncate font-medium">{p.provider}</span>
+                <span className="text-muted-foreground tabular-nums">
+                  {p.count.toLocaleString("id-ID")} ({pct.toLocaleString("id-ID", { maximumFractionDigits: 1 })}%)
+                </span>
+              </div>
+              <div className="bg-muted h-2 w-full overflow-hidden rounded-full">
+                <div className="bg-primary h-full rounded-full" style={{ width: `${barWidth}%` }} />
+              </div>
+            </div>
+          );
+        })}
+        {stats && rows.length > 0 && (
+          <Badge variant="secondary" className="mt-2">
+            {totalLinks.toLocaleString("id-ID")} titik berprovider
           </Badge>
         )}
       </CardContent>

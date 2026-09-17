@@ -526,3 +526,95 @@ class ProviderFilterTest(TestCase):
         c = APIClient()
         c.force_authenticate(user)
         return c
+
+
+class ProviderBreakdownTest(TestCase):
+    """T55: provider breakdown on the dashboard. Cites C42-C49,V57."""
+
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        from rest_framework.test import APIClient
+        from .models import LinkRole
+
+        self.api = APIClient()
+        self.role, _ = LinkRole.objects.get_or_create(name="MAIN")
+
+        self.net_a = Networks.objects.create(name="NetA", network_id="NA")
+        self.net_b = Networks.objects.create(name="NetB", network_id="NB")
+        self.org_a = Organizations.objects.create(name="OrgA")
+        self.org_a.networks.add(self.net_a)
+        self.org_b = Organizations.objects.create(name="OrgB")
+        self.org_b.networks.add(self.net_b)
+
+        # Two links on ONE site: C44 counts rows, so TELKOM must read 2 here
+        # even though it would read 1 as a distinct-site count (V56).
+        self.double = Members.objects.create(
+            name="Double", member_id="D1", network=self.net_a
+        )
+        for sid in ("S1", "S2"):
+            MemberLink.objects.create(
+                sid=sid, member=self.double, role=self.role, provider="TELKOM"
+            )
+        self.icon_site = Members.objects.create(
+            name="IconSite", member_id="I1", network=self.net_a
+        )
+        MemberLink.objects.create(
+            sid="S3", member=self.icon_site, role=self.role, provider="ICON"
+        )
+        # No link at all -> the Tanpa Link row.
+        self.bare = Members.objects.create(
+            name="Bare", member_id="B1", network=self.net_a
+        )
+        # Another org's provider must not appear in org A's breakdown.
+        self.foreign = Members.objects.create(
+            name="Foreign", member_id="F1", network=self.net_b
+        )
+        MemberLink.objects.create(
+            sid="S4", member=self.foreign, role=self.role, provider="BIZNET"
+        )
+
+        self.user = User.objects.create_user(
+            username="breakdown", password="pass1234", organization=self.org_a
+        )
+        self.user.groups.add(Group.objects.get_or_create(name="External")[0])
+        self.api.force_authenticate(self.user)
+
+    def _rows(self, user=None):
+        client = self.api
+        if user is not None:
+            client = self._client_for(user)
+        r = client.get("/api/members/sites/stats/")
+        self.assertEqual(r.status_code, 200)
+        return r.json()["provider_breakdown"]
+
+    def test_counts_link_rows_not_distinct_sites(self):
+        # The site holding two TELKOM links contributes 2 (C44), unlike the
+        # /sites filter which collapses it to one (V56).
+        rows = {r["provider"]: r["count"] for r in self._rows()}
+        self.assertEqual(rows["TELKOM"], 2)
+        self.assertEqual(rows["ICON"], 1)
+
+    def test_unlinked_row_is_the_complement_not_a_null_join(self):
+        rows = {r["provider"]: r["count"] for r in self._rows()}
+        self.assertEqual(rows["Tanpa Link"], 1)
+
+    def test_providers_descending_and_no_link_pinned_last(self):
+        rows = self._rows()
+        self.assertEqual([r["provider"] for r in rows], ["TELKOM", "ICON", "Tanpa Link"])
+
+    def test_scoped_to_own_org(self):
+        names = [r["provider"] for r in self._rows()]
+        self.assertNotIn("BIZNET", names)
+
+    def test_superuser_sees_all_orgs(self):
+        boss = User.objects.create_superuser(username="boss2", password="pass1234")
+        rows = {r["provider"]: r["count"] for r in self._rows(boss)}
+        self.assertEqual(rows["BIZNET"], 1)
+        self.assertEqual(rows["TELKOM"], 2)
+
+    def _client_for(self, user):
+        from rest_framework.test import APIClient
+
+        c = APIClient()
+        c.force_authenticate(user)
+        return c

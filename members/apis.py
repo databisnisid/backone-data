@@ -1,4 +1,4 @@
-from django.db.models import Exists, OuterRef, Q
+from django.db.models import Count, Exists, OuterRef, Q
 from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
@@ -138,6 +138,32 @@ def apply_provider_filter(qs, providers):
     return qs.filter(predicate)
 
 
+def provider_breakdown(qs):
+    """Link-row counts per provider over an already-scoped queryset (C44/C45/V57).
+
+    Counts MemberLink ROWS, not sites: a site with two links from the same
+    provider contributes 2 (C44). Blank/null providers are excluded, matching
+    link_providers(), so the panel and the C41 dropdown agree on what a name is.
+    The `Tanpa Link` row is the ~Exists complement over the same qs — never
+    filter(member_links__isnull=True) — so a linked site is never also counted
+    as having none (V57).
+    """
+    rows = [
+        {"provider": row["provider"], "count": row["n"]}
+        for row in MemberLink.objects.filter(member__in=qs)
+        .exclude(provider__isnull=True)
+        .exclude(provider="")
+        .values("provider")
+        .annotate(n=Count("id"))
+        .order_by("-n", "provider")
+    ]
+    unlinked = qs.filter(
+        ~Exists(MemberLink.objects.filter(member=OuterRef("pk")))
+    ).count()
+    rows.append({"provider": NO_LINK, "count": unlinked})
+    return rows
+
+
 class SitesViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = MemberSerializer
@@ -193,8 +219,6 @@ class SitesViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="stats")
     def stats(self, request):
-        from django.db.models import Count, Q
-
         qs = member_queryset_for(request.user)
         now = timezone.now()
         total = qs.count()
@@ -237,6 +261,7 @@ class SitesViewSet(viewsets.ModelViewSet):
                     }
                     for g in groups
                 ],
+                "provider_breakdown": provider_breakdown(qs),
             }
         )
     @action(detail=False, methods=["get"], url_path="options")
