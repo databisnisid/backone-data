@@ -86,7 +86,7 @@ def active_members_queryset(qs):
 
 
 def apply_status_filter(qs, status):
-    """?status=active (default) | all | dismantle on the sites list — V25."""
+    """?status=active | all (default) | dismantle on the sites list — V25, C52."""
     if status == "dismantle":
         return qs.filter(offline_at__isnull=False, offline_at__lte=timezone.now())
     if status == "active":
@@ -181,7 +181,7 @@ class SitesViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = member_queryset_for(self.request.user)
         if self.action == "list":
-            qs = apply_status_filter(qs, self.request.query_params.get("status", "active"))
+            qs = apply_status_filter(qs, self.request.query_params.get("status", "all"))
             # Filter by network IDs when ?network= is present (V34 site picker).
             nets = self.request.query_params.getlist("network")
             if nets:

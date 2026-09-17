@@ -95,6 +95,8 @@ function Cols({ me, cols, row, onEdit }: { me: Me; cols: ColVisibility; row: Sit
         <TableCell>
           <div className="font-medium">{row.name ?? row.member_id}</div>
           <div className="text-muted-foreground text-xs">{row.address ?? "-"}</div>
+          {/* C57/V60: dismantled rows are marked by TEXT, not colour alone. */}
+          {!row.is_online && <Badge variant="outline">Dismantled</Badge>}
         </TableCell>
       )}
       {cols.layanan && (
@@ -283,7 +285,7 @@ export function SitesView() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  <TableRow key={row.id}>
+                  <TableRow key={row.id} className={!row.is_online ? "text-muted-foreground" : undefined}>
                     <Cols me={me} cols={cols} row={row} onEdit={setEditingId} />
                   </TableRow>
                 ),

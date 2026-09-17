@@ -702,3 +702,73 @@ class ProviderBreakdownStatusTest(TestCase):
         # and belongs to the complement. Only `new` (active + linked) is
         # excluded, so 4 sites - 1 = 3.
         self.assertEqual(self._rows()["Tanpa Link"], 3)
+
+
+class SitesStatusScopeTest(TestCase):
+    """T58: the `/sites` list spans ALL statuses by default (C52/C53), while
+    `?status=active` stays an explicit opt-in (V25) and export stays
+    active-only (C55).
+
+    Cites C52,C53,C55,V25.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        from rest_framework.test import APIClient
+
+        self.api = APIClient()
+        self.net = Networks.objects.create(name="NetZ", network_id="NZ")
+        self.org = Organizations.objects.create(name="OrgZ")
+        self.org.networks.add(self.net)
+
+        yesterday = timezone.now() - timedelta(days=1)
+        # Prod shape: a dismantled site (3704) and an active namesake.
+        self.old = Members.objects.create(
+            name="Cirebon Dismantled", member_id="SIAB9101",
+            network=self.net, address="CPI Cirebon", offline_at=yesterday,
+        )
+        self.new = Members.objects.create(
+            name="Semarang Active", member_id="SIAB9102", network=self.net,
+        )
+
+        self.user = User.objects.create_user(
+            username="scope", password="pass1234", organization=self.org
+        )
+        self.user.groups.add(Group.objects.get_or_create(name="External")[0])
+        self.api.force_authenticate(self.user)
+
+    @staticmethod
+    def _ids(response):
+        return {row["member_id"] for row in response.json()["results"]}
+
+    def test_default_list_includes_dismantled_site(self):
+        # C52: no ?status= param at all — the dismantled site MUST appear.
+        r = self.api.get("/api/members/sites/")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(self._ids(r), {"SIAB9101", "SIAB9102"})
+
+    def test_search_finds_dismantled_site(self):
+        # C53: searched scope is the same all-status scope.
+        r = self.api.get("/api/members/sites/", {"search": "Cirebon"})
+        self.assertEqual(self._ids(r), {"SIAB9101"})
+
+    def test_status_active_is_explicit_opt_in(self):
+        # V25: narrowing is still reachable, just no longer the default.
+        r = self.api.get("/api/members/sites/", {"status": "active"})
+        self.assertEqual(self._ids(r), {"SIAB9102"})
+
+    def test_status_dismantle_returns_only_dismantled(self):
+        r = self.api.get("/api/members/sites/", {"status": "dismantle"})
+        self.assertEqual(self._ids(r), {"SIAB9101"})
+
+    def test_export_stays_active_only(self):
+        # C55: the XLSX download deliberately diverges from the grid.
+        import io
+        from openpyxl import load_workbook
+
+        r = self.api.get("/api/members/sites/export/")
+        self.assertEqual(r.status_code, 200)
+        ws = load_workbook(io.BytesIO(r.content)).active
+        ids = {str(c.value) for row in ws.iter_rows() for c in row}
+        self.assertNotIn("SIAB9101", ids)
+        self.assertIn("SIAB9102", ids)
