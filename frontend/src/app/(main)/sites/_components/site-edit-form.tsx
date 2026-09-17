@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { createSiteLink, deleteSiteFile, deleteSiteLink, fetchLinkServices, fetchMemberOptions, fetchSite, patchSiteLink, uploadSiteFile, type MemberOptions } from "./api";
 import {
   isFieldWritable,
+  linkDetail,
   type Me,
   type SiteLink,
   type SiteRow,
@@ -321,7 +322,7 @@ export function SiteEditForm({
                   LINK {l.role} {l.service ? `- ${serviceName(services, l.service)}` : ""}
                 </span>
                 <div className="text-muted-foreground text-xs">
-                  {[l.provider, l.capacity ? `CID: ${l.capacity}` : null, l.sid ? `SID: ${l.sid}` : null].filter(Boolean).join(" | ")}
+                  {linkDetail(l)}
                 </div>
                 <button
                   type="button"

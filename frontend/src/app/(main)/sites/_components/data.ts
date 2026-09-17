@@ -1,3 +1,5 @@
+import { isExternalNavHidden } from "@/lib/nav-access";
+
 export type SiteLink = {
   id: number;
   role: string;
@@ -70,21 +72,40 @@ export function isFinance(me: Me) {
 export function isPurchasing(me: Me) {
   return me.groups.some((g) => PURCHASING_ROLES.has(g));
 }
+
+// C39/V54: External/External Network get the reduced grid. Membership in either
+// group wins over any other role group for COLUMNS; is_superuser is exempt and is
+// checked first — mirrors the nav rule (C36/V51). Deny-only, never a grant.
+export function isExternalViewOnly(me: Me): boolean {
+  return !me.is_superuser && isExternalNavHidden(me.groups);
+}
+
+// C39/V54: the link detail line (`provider | CID: x | SID: y`) lives in ONE place
+// so both render sites share it (V53). External drops only the SID segment.
+export function linkDetail(l: SiteLink, hideSid = false): string {
+  return [l.provider, l.capacity ? `CID: ${l.capacity}` : null, !hideSid && l.sid ? `SID: ${l.sid}` : null]
+    .filter(Boolean)
+    .join(" | ");
+}
+
 export type ColKey = "situs" | "layanan" | "timeline" | "baa" | "po" | "invoice" | "dismantle" | "keterangan";
 
 export type ColVisibility = Record<ColKey, boolean>;
 
-// V34-view: all 5 groups see the same columns. No role-based column hiding.
-export function visibleColumns(_me: Me): ColVisibility {
+// C39/V54: External/External Network see only Situs & Address, Detail Layanan &
+// Project, Timeline, Status BAA — PO/Invoice/Dismantle/Keterangan are hidden on
+// top of the always-visible core set. Other roles keep all 8 columns.
+export function visibleColumns(me: Me): ColVisibility {
+  const external = isExternalViewOnly(me);
   return {
     situs: true,
     layanan: true,
     timeline: true,
     baa: true,
-    po: true,
-    invoice: true,
-    dismantle: true,
-    keterangan: true,
+    po: !external,
+    invoice: !external,
+    dismantle: !external,
+    keterangan: !external,
   };
 }
 

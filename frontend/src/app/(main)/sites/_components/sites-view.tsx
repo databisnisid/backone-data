@@ -22,10 +22,12 @@ import { fetchMe, fetchSites, patchSite } from "./api";
 import { CreateSiteDialog } from "./create-site-dialog";
 import {
   type ColVisibility,
+  isExternalViewOnly,
   isFinance,
   isPurchasing,
   isSales,
   isSupport,
+  linkDetail,
   type Me,
   PAGE_SIZE,
   type SiteLink,
@@ -55,7 +57,7 @@ function LinkChip({ url, label }: { url: string | null; label: string }) {
   );
 }
 
-function SiteLinks({ links }: { links: SiteLink[] }) {
+function SiteLinks({ links, hideSid }: { links: SiteLink[]; hideSid?: boolean }) {
   if (!links.length) return <span className="text-muted-foreground">-</span>;
   return (
     <div className="space-y-1">
@@ -65,7 +67,7 @@ function SiteLinks({ links }: { links: SiteLink[] }) {
             LINK {l.role} {l.service ? `- ${l.service}` : ""}
           </span>
           <div className="text-muted-foreground">
-            {[l.provider, l.capacity ? `CID: ${l.capacity}` : null, l.sid ? `SID: ${l.sid}` : null].filter(Boolean).join(" | ")}
+            {linkDetail(l, hideSid)}
           </div>
         </div>
       ))}
@@ -75,8 +77,9 @@ function SiteLinks({ links }: { links: SiteLink[] }) {
 
 function Cols({ me, cols, row, onEdit }: { me: Me; cols: ColVisibility; row: SiteRow; onEdit: (id: number) => void }) {
   // Role-scoped edit (T23): any role with writable feature fields may open the form.
-  // Core/identity fields stay read-only on synced sites (V20); form defs control field-level scope.
+  // External/External Network hold no edit role, so they get the read-only "View" cell (C39).
   const editable = isSupport(me) || isSales(me) || isFinance(me) || isPurchasing(me);
+  const hideSid = isExternalViewOnly(me);
   const baaUrl = fileHref(row.upload_baa);
   return (
     <>
@@ -91,7 +94,7 @@ function Cols({ me, cols, row, onEdit }: { me: Me; cols: ColVisibility; row: Sit
           {row.sdwan_package && <Badge variant="secondary">{row.sdwan_package}</Badge>}
           {row.project_number && <div className="text-xs">Project: {row.project_number}</div>}
           {row.network_group && <div className="text-xs">Networks: {row.network_name ?? row.network_group}</div>}
-          <SiteLinks links={row.member_links} />
+          <SiteLinks links={row.member_links} hideSid={hideSid} />
         </TableCell>
       )}
       {cols.timeline && (
@@ -320,11 +323,13 @@ export function SitesView() {
               <Plus className="size-4" /> Tambah Situs Baru
             </Button>
           )}
-          <Button variant="outline" asChild>
-            <a href="/api/backend/members/sites/export">
-              <Download className="size-4" /> Download XLSX
-            </a>
-          </Button>
+          {!isExternalViewOnly(me) && (
+            <Button variant="outline" asChild>
+              <a href="/api/backend/members/sites/export">
+                <Download className="size-4" /> Download XLSX
+              </a>
+            </Button>
+          )}
         </div>
       </div>
 
