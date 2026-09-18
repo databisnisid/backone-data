@@ -135,11 +135,6 @@ function Cols({ me, cols, row, onEdit }: { me: Me; cols: ColVisibility; row: Sit
           <LinkChip url={fileHref(row.invoice_file)} label={fileName(row.invoice_file) ?? "Bukti"} />
         </TableCell>
       )}
-      {cols.dismantle && (
-        <TableCell>
-          <LinkChip url={fileHref(row.bap_file)} label="BAP" />
-        </TableCell>
-      )}
       {cols.keterangan && (
         <TableCell>
           <span className="line-clamp-2 text-xs">{row.notes ?? "-"}</span>
@@ -167,7 +162,6 @@ function headersFor(cols: ColVisibility): string[] {
     { label: "Status BAA", col: "baa" },
     { label: "PO Dokumen", col: "po" },
     { label: "Invoice", col: "invoice" },
-    { label: "Dismantle", col: "dismantle" },
     { label: "Keterangan", col: "keterangan" },
   ];
   return defs.filter((d) => cols[d.col]).map((d) => d.label);
@@ -280,7 +274,6 @@ export function SitesView() {
           <colgroup>
             <col className="w-[24%]" />
             <col className="w-[20%]" />
-            <col />
             <col />
             <col />
             <col />

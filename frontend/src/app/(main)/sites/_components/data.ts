@@ -88,13 +88,13 @@ export function linkDetail(l: SiteLink, hideSid = false): string {
     .join(" | ");
 }
 
-export type ColKey = "situs" | "layanan" | "timeline" | "baa" | "po" | "invoice" | "dismantle" | "keterangan";
+export type ColKey = "situs" | "layanan" | "timeline" | "baa" | "po" | "invoice" | "keterangan";
 
 export type ColVisibility = Record<ColKey, boolean>;
 
 // C39/V54: External/External Network see only Situs & Address, Detail Layanan &
-// Project, Timeline, Status BAA — PO/Invoice/Dismantle/Keterangan are hidden on
-// top of the always-visible core set. Other roles keep all 8 columns.
+// Project, Timeline, Status BAA — PO/Invoice/Keterangan are hidden on top of the
+// always-visible core set. Other roles keep all 7 columns.
 export function visibleColumns(me: Me): ColVisibility {
   const external = isExternalViewOnly(me);
   return {
@@ -104,7 +104,6 @@ export function visibleColumns(me: Me): ColVisibility {
     baa: true,
     po: !external,
     invoice: !external,
-    dismantle: !external,
     keterangan: !external,
   };
 }
