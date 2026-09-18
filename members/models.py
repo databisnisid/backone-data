@@ -73,6 +73,25 @@ class LinkRole(models.Model):
         return "%s" % self.name
 
 
+class LinkProvider(models.Model):
+    """Lookup: link provider options (C61). Backs MemberLink.provider FK.
+
+    max_length=50, not LinkRole's 10: `provider` was free text at 50 chars, so a
+    shorter column could truncate a legacy value during the backfill (C61).
+    """
+
+    name = models.CharField(_("Name"), max_length=50, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("Link Provider")
+        verbose_name_plural = _("Link Providers")
+
+    def __str__(self):
+        return "%s" % self.name
+
+
 class Members(ClusterableModel):
     name = models.CharField(_("Member Name"), max_length=50)
     member_code = models.CharField(
@@ -401,7 +420,14 @@ class MemberLink(models.Model):
         blank=True,
         null=True,
     )
-    provider = models.CharField(_("Provider"), max_length=50, blank=True, null=True)
+    provider = models.ForeignKey(
+        LinkProvider,
+        on_delete=models.PROTECT,
+        related_name="member_links",
+        verbose_name=_("Provider"),
+        blank=True,
+        null=True,
+    )
     capacity = models.CharField(_("Capacity"), max_length=20, blank=True, null=True)
     sid = models.CharField(_("SID Langganan"), max_length=100, blank=True, null=True)
 
@@ -411,7 +437,11 @@ class MemberLink(models.Model):
         verbose_name_plural = _("Member Links")
 
     def __str__(self):
-        return "%s %s - %s" % (self.role.name if self.role else "", self.service or "", self.provider or "")
+        return "%s %s - %s" % (
+            self.role.name if self.role else "",
+            self.service or "",
+            self.provider.name if self.provider else "",
+        )
 
 
 

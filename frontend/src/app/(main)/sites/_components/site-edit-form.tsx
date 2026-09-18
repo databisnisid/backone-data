@@ -84,6 +84,7 @@ const EMPTY_OPTIONS: MemberOptions = {
   default_sdwan_package: "",
   baa_status_category: [],
   role: [],
+  provider: [],
 };
 
 function useMemberOptions(): MemberOptions {
@@ -391,7 +392,18 @@ export function SiteEditForm({
             </div>
             <div className="flex flex-col gap-1">
               <FieldLabel htmlFor="link-provider">Provider</FieldLabel>
-              <Input id="link-provider" value={newLink.provider ?? ""} onChange={(e) => setNewLink((n) => ({ ...n, provider: e.target.value }))} />
+              <Select value={newLink.provider ?? ""} onValueChange={(v) => setNewLink((n) => ({ ...n, provider: v }))}>
+                <SelectTrigger id="link-provider" className="w-full">
+                  <SelectValue placeholder="Provider" />
+                </SelectTrigger>
+                <SelectContent>
+                  {memberOptions.provider.map((p) => (
+                    <SelectItem key={p} value={p}>
+                      {p}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex flex-col gap-1">
               <FieldLabel htmlFor="link-capacity">CID</FieldLabel>
@@ -401,7 +413,12 @@ export function SiteEditForm({
               <FieldLabel htmlFor="link-sid">SID</FieldLabel>
               <div className="flex gap-1">
                 <Input id="link-sid" value={newLink.sid ?? ""} onChange={(e) => setNewLink((n) => ({ ...n, sid: e.target.value }))} />
-                <Button size="sm" onClick={() => onLinkSave(newLink)} title="Simpan link baru">
+                <Button
+                  size="sm"
+                  disabled={!newLink.provider}
+                  onClick={() => onLinkSave(newLink)}
+                  title="Simpan link baru"
+                >
                   <Plus className="size-4" />
                 </Button>
               </div>

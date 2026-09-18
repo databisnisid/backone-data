@@ -89,6 +89,7 @@ export type MemberOptions = {
   default_sdwan_package: string;
   baa_status_category: string[];
   role: string[];
+  provider: string[];
 };
 
 export async function fetchMemberOptions() {

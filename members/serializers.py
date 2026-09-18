@@ -1,6 +1,6 @@
 import os
 from rest_framework import serializers
-from .models import Members, MemberLink, Links, SdwanPackage, BaaStatus, LinkRole
+from .models import Members, MemberLink, Links, SdwanPackage, BaaStatus, LinkRole, LinkProvider
 from .rbac import writable_fields, readable_fields, CORE_EDIT_FIELDS
 
 
@@ -13,6 +13,9 @@ class MemberLinkSerializer(serializers.ModelSerializer):
     )
     service = serializers.PrimaryKeyRelatedField(
         queryset=Links.objects.all(), required=False, allow_null=True
+    )
+    provider = serializers.SlugRelatedField(
+        slug_field="name", queryset=LinkProvider.objects.all(), required=True
     )
 
     class Meta:

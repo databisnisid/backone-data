@@ -15,6 +15,7 @@ const KINDS = [
   { kind: "sdwan", label: "SDWAN Package" },
   { kind: "baa", label: "BAA Status" },
   { kind: "role", label: "Link Role" },
+  { kind: "provider", label: "Link Provider" },
 ] as const;
 
 type Kind = (typeof KINDS)[number]["kind"];
@@ -23,6 +24,7 @@ const KIND_LABEL: Record<Kind, string> = {
   sdwan: "SDWAN",
   baa: "BAA",
   role: "Role",
+  provider: "Provider",
 };
 
 async function listLookups(kind: Kind): Promise<Lookup[]> {

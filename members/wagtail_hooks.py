@@ -14,7 +14,7 @@ from django.utils import timezone
 from wagtailgeowidget import geocoders
 from wagtailgeowidget.panels import GeoAddressPanel, GoogleMapsPanel
 from django.contrib.auth.models import Group
-from .models import Members, SdwanPackage, BaaStatus, LinkRole
+from .models import Members, SdwanPackage, BaaStatus, LinkRole, LinkProvider
 
 
 class MembersViewSet(SnippetViewSet):
@@ -195,6 +195,22 @@ class LinkRoleViewSet(SnippetViewSet):
         return False
 
 
+class LinkProviderViewSet(SnippetViewSet):
+    model = LinkProvider
+    menu_label = "Link Providers"
+    menu_icon = "tag"
+    add_to_settings_menu = True
+    menu_order = 304
+    list_display = ("name",)
+    search_fields = ("name",)
+    list_per_page = 100
+    panels = [FieldPanel("name")]
+
+    def user_can_delete_obj(self, request, obj):
+        return False
+
+
 register_snippet(SdwanPackageViewSet)
 register_snippet(BaaStatusViewSet)
 register_snippet(LinkRoleViewSet)
+register_snippet(LinkProviderViewSet)

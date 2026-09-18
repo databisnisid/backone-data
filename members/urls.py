@@ -7,6 +7,7 @@ from .apis import (
     SdwanLookupViewSet,
     BaaLookupViewSet,
     RoleLookupViewSet,
+    ProviderLookupViewSet,
 )
 
 
@@ -17,6 +18,7 @@ router.register("links", MemberLinkViewSet, basename="links")
 router.register("lookups/sdwan", SdwanLookupViewSet, basename="lookups-sdwan")
 router.register("lookups/baa", BaaLookupViewSet, basename="lookups-baa")
 router.register("lookups/role", RoleLookupViewSet, basename="lookups-role")
+router.register("lookups/provider", ProviderLookupViewSet, basename="lookups-provider")
 
 
 urlpatterns = [

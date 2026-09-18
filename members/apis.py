@@ -16,6 +16,7 @@ from rest_framework.permissions import BasePermission
 from .models import (
     BaaStatus,
     DEFAULT_SDWAN_PACKAGE,
+    LinkProvider,
     LinkRole,
     MemberLink,
     Members,
@@ -75,6 +76,11 @@ class RoleLookupViewSet(_LookupViewSetBase):
     serializer_class = _make_lookup_serializer(LinkRole)
 
 
+class ProviderLookupViewSet(_LookupViewSetBase):
+    queryset = LinkProvider.objects.all()
+    serializer_class = _make_lookup_serializer(LinkProvider)
+
+
 def member_queryset_for(user):
     """Full role-set queryset (active + dismantled) — aggregates/detail never double-filter (V25)."""
     if sees_all_sites(user):
@@ -113,10 +119,9 @@ def link_providers(user):
     return list(
         MemberLink.objects.filter(member__in=member_queryset_for(user))
         .exclude(provider__isnull=True)
-        .exclude(provider="")
-        .values_list("provider", flat=True)
+        .values_list("provider__name", flat=True)
         .distinct()
-        .order_by("provider")
+        .order_by("provider__name")
     )
 
 
@@ -135,7 +140,11 @@ def apply_provider_filter(qs, providers):
     clauses = []
     if named:
         clauses.append(
-            Exists(MemberLink.objects.filter(member=OuterRef("pk"), provider__in=named))
+            Exists(
+                MemberLink.objects.filter(
+                    member=OuterRef("pk"), provider__name__in=named
+                )
+            )
         )
     if NO_LINK in providers:
         clauses.append(~Exists(MemberLink.objects.filter(member=OuterRef("pk"))))
@@ -162,13 +171,12 @@ def provider_breakdown(qs):
     """
     active = active_members_queryset(qs)
     rows = [
-        {"provider": row["provider"], "count": row["n"]}
+        {"provider": row["provider__name"], "count": row["n"]}
         for row in MemberLink.objects.filter(member__in=active)
         .exclude(provider__isnull=True)
-        .exclude(provider="")
-        .values("provider")
+        .values("provider__name")
         .annotate(n=Count("member", distinct=True))
-        .order_by("-n", "provider")
+        .order_by("-n", "provider__name")
     ]
     linked = active.filter(
         Exists(MemberLink.objects.filter(member=OuterRef("pk")))
@@ -319,8 +327,7 @@ class SitesViewSet(viewsets.ModelViewSet):
         )
     @action(detail=False, methods=["get"], url_path="options")
     def options(self, request):
-        """Return the lookup option lists (sdwan/baa/role names) for the FE selects (C25)."""
-        from .models import SdwanPackage, BaaStatus, LinkRole
+        """Return the lookup option lists (sdwan/baa/role/provider names) for the FE selects (C25,C61)."""
 
         return Response(
             {
@@ -333,6 +340,9 @@ class SitesViewSet(viewsets.ModelViewSet):
                     BaaStatus.objects.order_by("name").values_list("name", flat=True)
                 ),
                 "role": list(LinkRole.objects.order_by("name").values_list("name", flat=True)),
+                "provider": list(
+                    LinkProvider.objects.order_by("name").values_list("name", flat=True)
+                ),
             }
         )
 

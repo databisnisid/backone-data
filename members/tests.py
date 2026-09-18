@@ -419,10 +419,13 @@ class ProviderFilterTest(TestCase):
     def setUp(self):
         from django.contrib.auth.models import Group
         from rest_framework.test import APIClient
-        from .models import LinkRole
+        from .models import LinkRole, LinkProvider
 
         self.api = APIClient()
         self.role, _ = LinkRole.objects.get_or_create(name="MAIN")
+        self.telkom, _ = LinkProvider.objects.get_or_create(name="TELKOM")
+        self.icon, _ = LinkProvider.objects.get_or_create(name="ICON")
+        self.biznet, _ = LinkProvider.objects.get_or_create(name="BIZNET")
 
         self.net_a = Networks.objects.create(name="NetA", network_id="NA")
         self.net_b = Networks.objects.create(name="NetB", network_id="NB")
@@ -437,13 +440,13 @@ class ProviderFilterTest(TestCase):
         )
         for sid in ("S1", "S2"):
             MemberLink.objects.create(
-                sid=sid, member=self.double, role=self.role, provider="TELKOM"
+                sid=sid, member=self.double, role=self.role, provider=self.telkom
             )
         self.icon_site = Members.objects.create(
             name="IconSite", member_id="I1", network=self.net_a
         )
         MemberLink.objects.create(
-            sid="S3", member=self.icon_site, role=self.role, provider="ICON"
+            sid="S3", member=self.icon_site, role=self.role, provider=self.icon
         )
         self.bare = Members.objects.create(
             name="Bare", member_id="B1", network=self.net_a
@@ -453,11 +456,12 @@ class ProviderFilterTest(TestCase):
             name="Foreign", member_id="F1", network=self.net_b
         )
         MemberLink.objects.create(
-            sid="S4", member=self.foreign, role=self.role, provider="BIZNET"
+            sid="S4", member=self.foreign, role=self.role, provider=self.biznet
         )
-        # Blank provider row — must never become a filter option.
+        # Legacy link with NO provider (pre-C61 blank row) — must stay readable
+        # and must never become a filter option (V67).
         MemberLink.objects.create(
-            sid="S5", member=self.bare, role=self.role, provider=""
+            sid="S5", member=self.bare, role=self.role, provider=None
         )
 
         self.user = User.objects.create_user(
@@ -511,7 +515,8 @@ class ProviderFilterTest(TestCase):
     def test_providers_options_scoped_to_own_org(self):
         r = self.api.get("/api/members/sites/providers/")
         self.assertEqual(r.status_code, 200)
-        # "Tanpa Link" sentinel always offered; BIZNET belongs to another org.
+        # "Tanpa Link" sentinel always offered; BIZNET belongs to another org,
+        # and the null-provider legacy link contributes no option (V67).
         self.assertEqual(r.json(), ["ICON", "TELKOM", "Tanpa Link"])
 
     def test_superuser_options_see_all_providers(self):
@@ -519,6 +524,42 @@ class ProviderFilterTest(TestCase):
         r = self._client_for(boss).get("/api/members/sites/providers/")
         # Blank-provider row is not an option.
         self.assertEqual(r.json(), ["BIZNET", "ICON", "TELKOM", "Tanpa Link"])
+
+    def test_provider_required_on_link_create(self):
+        # C63/V67: provider is required at the serializer boundary.
+        sites = self._client_for(self.user)
+        r = sites.post(
+            "/api/members/links/",
+            {"member": self.bare.pk, "sid": "S9", "capacity": "10M"},
+            format="json",
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("provider", r.json())
+
+    def test_null_provider_link_serializes(self):
+        # V67: legacy null links stay readable, never 500.
+        link = MemberLink.objects.get(sid="S5")
+        site = self.api.get(f"/api/members/sites/{self.bare.pk}/")
+        self.assertEqual(site.status_code, 200)
+        rows = {l["id"]: l["provider"] for l in site.json()["member_links"]}
+        self.assertIsNone(rows[link.pk])
+
+    def test_lookup_provider_crud_is_superuser_only(self):
+        # C61/V65: the fourth lookup table rides the same gate as the others.
+        r = self.api.get("/api/members/lookups/provider/")
+        self.assertEqual(r.status_code, 403)
+        boss = User.objects.create_superuser(username="boss2", password="pass1234")
+        r = self._client_for(boss).get("/api/members/lookups/provider/")
+        self.assertEqual(r.status_code, 200)
+        r = self._client_for(boss).post(
+            "/api/members/lookups/provider/", {"name": "MYREP"}, format="json"
+        )
+        self.assertEqual(r.status_code, 201)
+        # V39/V44: no destroy route exists at all.
+        r = self._client_for(boss).delete(
+            f"/api/members/lookups/provider/{r.json()['id']}/"
+        )
+        self.assertEqual(r.status_code, 405)
 
     def _client_for(self, user):
         from rest_framework.test import APIClient
@@ -534,10 +575,13 @@ class ProviderBreakdownTest(TestCase):
     def setUp(self):
         from django.contrib.auth.models import Group
         from rest_framework.test import APIClient
-        from .models import LinkRole
+        from .models import LinkRole, LinkProvider
 
         self.api = APIClient()
         self.role, _ = LinkRole.objects.get_or_create(name="MAIN")
+        self.telkom, _ = LinkProvider.objects.get_or_create(name="TELKOM")
+        self.icon, _ = LinkProvider.objects.get_or_create(name="ICON")
+        self.biznet, _ = LinkProvider.objects.get_or_create(name="BIZNET")
 
         self.net_a = Networks.objects.create(name="NetA", network_id="NA")
         self.net_b = Networks.objects.create(name="NetB", network_id="NB")
@@ -553,22 +597,22 @@ class ProviderBreakdownTest(TestCase):
         )
         for sid in ("S1", "S2"):
             MemberLink.objects.create(
-                sid=sid, member=self.double, role=self.role, provider="TELKOM"
+                sid=sid, member=self.double, role=self.role, provider=self.telkom
             )
         self.icon_site = Members.objects.create(
             name="IconSite", member_id="I1", network=self.net_a
         )
         MemberLink.objects.create(
-            sid="S3", member=self.icon_site, role=self.role, provider="ICON"
+            sid="S3", member=self.icon_site, role=self.role, provider=self.icon
         )
         # One site holding BOTH providers — the prod shape (B8) whose two
         # links the footer "titik berprovider" must collapse to one site.
         self.mixed = Members.objects.create(
             name="Mixed", member_id="M1", network=self.net_a
         )
-        for provider in ("ICON", "TELKOM"):
+        for provider in (self.icon, self.telkom):
             MemberLink.objects.create(
-                sid=f"M-{provider}",
+                sid=f"M-{provider.name}",
                 member=self.mixed,
                 role=self.role,
                 provider=provider,
@@ -582,7 +626,7 @@ class ProviderBreakdownTest(TestCase):
             name="Foreign", member_id="F1", network=self.net_b
         )
         MemberLink.objects.create(
-            sid="S4", member=self.foreign, role=self.role, provider="BIZNET"
+            sid="S4", member=self.foreign, role=self.role, provider=self.biznet
         )
 
         self.user = User.objects.create_user(
@@ -649,10 +693,12 @@ class ProviderBreakdownStatusTest(TestCase):
     def setUp(self):
         from django.contrib.auth.models import Group
         from rest_framework.test import APIClient
-        from .models import LinkRole
+        from .models import LinkRole, LinkProvider
 
         self.api = APIClient()
         self.role, _ = LinkRole.objects.get_or_create(name="MAIN")
+        self.telkom, _ = LinkProvider.objects.get_or_create(name="TELKOM")
+        self.icon, _ = LinkProvider.objects.get_or_create(name="ICON")
         self.net = Networks.objects.create(name="NetS", network_id="NS")
         self.org = Organizations.objects.create(name="OrgS")
         self.org.networks.add(self.net)
@@ -667,9 +713,9 @@ class ProviderBreakdownStatusTest(TestCase):
             name="New", member_id="NEW1", network=self.net
         )
         for site in (self.old, self.new):
-            for provider in ("TELKOM", "ICON"):
+            for provider in (self.telkom, self.icon):
                 MemberLink.objects.create(
-                    sid=f"{site.member_id}-{provider}",
+                    sid=f"{site.member_id}-{provider.name}",
                     member=site,
                     role=self.role,
                     provider=provider,
