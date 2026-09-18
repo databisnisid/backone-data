@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.db.models import Count, Exists, OuterRef, Q
 from django.utils import timezone
 from rest_framework import viewsets
@@ -8,16 +9,17 @@ from rest_framework import serializers
 from django.http import HttpResponse
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.decorators import action
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from .models import Members, MemberLink
 from .serializers import MemberSerializer, MemberFileSerializer, MemberLinkSerializer
-from .rbac import readable_fields, writable_fields, sees_all_sites
+from .rbac import CORE_EDIT_FIELDS, readable_fields, writable_fields, sees_all_sites
 from rest_framework.permissions import BasePermission
 from .models import (
     BaaStatus,
     DEFAULT_SDWAN_PACKAGE,
     LinkProvider,
     LinkRole,
+    Links,
     MemberLink,
     Members,
     SdwanPackage,
@@ -343,6 +345,289 @@ def apply_sdwan_filter(qs, package):
     return qs.filter(sdwan_package__name=package)
 
 
+SITES_COLUMNS = {
+    "member id": "member_id",
+    "name": "name",
+    "member code": "member_code",
+    "address": "address",
+    "online at": "online_at",
+    "offline at": "offline_at",
+    "service line": "service_line",
+    "ip address": "ip_address",
+    "sdwan package": "sdwan_package",
+    "baa status category": "baa_status_category",
+    "invoice number": "invoice_number",
+    "notes": "notes",
+}
+LINKS_COLUMNS = {
+    "member id": "member_id",
+    "link id": "link_id",
+    "role": "role",
+    "service": "service",
+    "provider": "provider",
+    "cid": "capacity",
+    "sid": "sid",
+}
+CONTEXT_COLUMNS = ("online_at", "offline_at")
+
+C75_IMPORT_SHEETS = (
+    ("Sites", SITES_COLUMNS, ("member_id",)),
+    ("Links", LINKS_COLUMNS, ("member_id", "role", "service", "provider")),
+)
+
+
+def _cell(value):
+    """openpyxl gives a blank cell as None; every other value is a real cell (C74)."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value.strip()
+    return str(value)
+
+
+def _parse_workbook(upload, problems):
+    """Read the uploaded workbook into per-sheet header maps plus raw rows.
+
+    Returns (sheets, rows) where missing sheets yield empty maps, so a file
+    without `Links` simply imports nothing there. A missing required header is
+    a file-level problem (V77) — it may never be treated as "every cell blank".
+    """
+    if upload is None:
+        problems.append({"sheet": "-", "row": 0, "message": "No file uploaded."})
+        return {}, []
+    try:
+        wb = load_workbook(upload, data_only=True)
+    except Exception as exc:
+        problems.append({"sheet": "-", "row": 0, "message": "Unreadable workbook: %s" % exc})
+        return {}, []
+    sheets = {}
+    rows = []
+    for name, spec, required in C75_IMPORT_SHEETS:
+        ws = wb[name] if name in wb.sheetnames else None
+        header_index = {}
+        if ws is not None:
+            for idx, header in enumerate(next(ws.iter_rows(max_row=1, values_only=True), ())):
+                mapped = spec.get(str(header).strip().lower(), "")
+                if mapped:
+                    header_index[idx] = mapped
+            for field in required:
+                if field not in header_index.values():
+                    problems.append(
+                        {
+                            "sheet": name,
+                            "row": 1,
+                            "message": "Missing required column: %s"
+                            % field.replace("_", " ").title(),
+                        }
+                    )
+        sheets[name] = header_index
+    if problems:
+        return sheets, rows
+    for name, _spec, _required in C75_IMPORT_SHEETS:
+        ws = wb[name] if name in wb.sheetnames else None
+        if ws is None:
+            continue
+        header_index = sheets[name]
+        fields = set(header_index.values())
+        for number, values in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            cells = {}
+            for idx, field in header_index.items():
+                cells[field] = _cell(values[idx]) if idx < len(values) else None
+            if any(v is not None for v in cells.values()):
+                rows.append(
+                    {"sheet": name, "row": number, "fields": fields, "cells": cells}
+                )
+    return sheets, rows
+
+def _messages(errors):
+    return "; ".join("%s: %s" % (k, " ".join(map(str, v))) for k, v in errors.items())
+
+def _links_and_lookup(user):
+    """Caller's existing links by id, plus the valid lookup names (C71/V74)."""
+    links = {
+        link.id: link
+        for link in MemberLink.objects.filter(member__in=member_queryset_for(user))
+    }
+    return links, {
+        "role": {r.name for r in LinkRole.objects.all()},
+        "provider": {p.name for p in LinkProvider.objects.all()},
+    }
+
+
+def _stage_site(entry, member, request, allowed, writes, problems):
+    cells = entry["cells"]
+    fields = entry["fields"]
+    payload = {}
+    for field in SITES_COLUMNS.values():
+        # An absent column leaves the field untouched (C74/V77). Member ID is
+        # the row key, not content; the timeline columns belong to the upstream
+        # sync, never to Excel.
+        if field == "member_id" or field in CONTEXT_COLUMNS:
+            continue
+        if field not in allowed or field not in fields:
+            continue
+        value = cells.get(field)
+        if value in (None, ""):
+            # C74: a blank optional cell clears the stored value. `notes` is
+            # the one column whose model field is non-null, so it clears to "".
+            payload[field] = "" if field == "notes" else None
+        else:
+            payload[field] = value
+    if not member.is_manual:
+        # V75: a core column on a synced site is skipped silently — never
+        # compared against the DB, never rejected — because a plain superuser
+        # export carries Name/Address/Service Line on every row.
+        payload = {f: v for f, v in payload.items() if f not in CORE_EDIT_FIELDS}
+    if not payload:
+        return 0
+    serializer = MemberSerializer(member, data=payload, partial=True, context={"request": request})
+    if not serializer.is_valid():
+        problems.append(
+            {"sheet": "Sites", "row": entry["row"], "message": _messages(serializer.errors)}
+        )
+        return 0
+
+    def current(field):
+        value = getattr(member, field)
+        return value.name if field in ("sdwan_package", "baa_status_category") and value else value
+
+    changed = [f for f, v in payload.items() if (current(f) or "") != (v or "")]
+    if not changed:
+        return 0
+    writes.append(serializer.save)
+    return len(changed)
+
+
+def _stage_link(entry, member, request, lookup, links, writes, problems):
+    cells = entry["cells"]
+    row_problem = {
+        "sheet": "Links",
+        "row": entry["row"],
+    }
+    link_id = cells.get("link_id")
+    instance = None
+    if link_id not in (None, ""):
+        try:
+            link_id = int(float(link_id))
+        except (TypeError, ValueError):
+            problems.append({**row_problem, "message": "Link ID is not a number: %s" % link_id})
+            return 0
+        instance = links.get(link_id)
+        if instance is None or instance.member_id != member.id:
+            problems.append(
+                {
+                    **row_problem,
+                    "message": "Link ID %s does not belong to Member ID %s."
+                    % (link_id, cells["member_id"]),
+                }
+            )
+            return 0
+    # C74/V77: `Role`/`Service`/`Provider` are required on a NEW link, but a
+    # blank cell on an EXISTING one clears it to NULL — all three columns are
+    # nullable, and the export writes a blank cell whenever a legacy link has
+    # none. A name that resolves to nothing still rejects on either row.
+    for field in ("role", "service", "provider"):
+        value = cells.get(field)
+        if value in (None, ""):
+            if instance is None:
+                problems.append({**row_problem, "message": "%s is required." % field.title()})
+                return 0
+            continue
+        if field == "provider":
+            if value not in lookup["provider"]:
+                problems.append({**row_problem, "message": "Unknown Provider: %s" % value})
+                return 0
+        elif field == "role":
+            if value not in lookup["role"]:
+                problems.append({**row_problem, "message": "Unknown Role: %s" % value})
+                return 0
+        else:
+            # `Links.name` carries no DB uniqueness, so a name must resolve to
+            # exactly one service row — 0 or 2+ matches reject rather than
+            # guess (C71/V74).
+            services = list(Links.objects.filter(name=value)[:2])
+            if len(services) != 1:
+                problems.append({**row_problem, "message": "Unknown Service: %s" % value})
+                return 0
+            cells["service"] = services[0].pk
+    payload = {field: cells.get(field) or None for field in ("role", "provider")}
+    payload["service"] = cells.get("service") or None
+    for column in ("capacity", "sid"):
+        # C74: a blank optional cell clears, but a column absent from the file
+        # leaves the stored value alone (`value == ""` on both paths).
+        if column in entry["fields"]:
+            payload[column] = cells.get(column) or ""
+    serializer = MemberLinkSerializer(
+        instance, data=payload, partial=True, context={"request": request}
+    )
+    if not serializer.is_valid():
+        problems.append({**row_problem, "message": _messages(serializer.errors)})
+        return 0
+    if instance is None:
+        writes.append(lambda: serializer.save(member=member))
+        return len(payload)
+    current = {
+        "role": instance.role.name if instance.role else "",
+        "service": instance.service_id,
+        "provider": instance.provider.name if instance.provider else "",
+        "capacity": instance.capacity or "",
+        "sid": instance.sid or "",
+    }
+    changed = [f for f, v in payload.items() if (v or "") != (current[f] or "")]
+    if not changed:
+        return 0
+    writes.append(serializer.save)
+    return len(changed)
+
+
+def _apply_workbook(request, upload):
+    """Validate an uploaded workbook; returns (problems, changed, rows, writes).
+
+    `writes` holds the only side effects of the whole import: preview ignores
+    it (V76 — preview writes nothing), apply runs it inside one
+    `transaction.atomic()` after this same check has come back clean.
+    """
+    problems = []
+    _sheets, rows = _parse_workbook(upload, problems)
+    if problems:
+        return problems, {}, [], []
+    user = request.user
+    allowed = writable_fields(user)
+    links, lookup = _links_and_lookup(user)
+    changed = {"Sites": 0, "Links": 0}
+    changed_rows = []
+    writes = []
+    sites = {}
+    for entry in rows:
+        member_id = entry["cells"].get("member_id")
+        if member_id in (None, ""):
+            problems.append(
+                {"sheet": entry["sheet"], "row": entry["row"], "message": "Member ID is required."}
+            )
+            continue
+        member = sites.get(member_id)
+        if member is None:
+            member = member_queryset_for(user).filter(member_id=member_id).first()
+            if member is None:
+                problems.append(
+                    {
+                        "sheet": entry["sheet"],
+                        "row": entry["row"],
+                        "message": "Unknown Member ID: %s" % member_id,
+                    }
+                )
+                continue
+            sites[member_id] = member
+        if entry["sheet"] == "Sites":
+            n = _stage_site(entry, member, request, allowed, writes, problems)
+        else:
+            n = _stage_link(entry, member, request, lookup, links, writes, problems)
+        changed[entry["sheet"]] += n
+        if n:
+            changed_rows.append([entry["sheet"], entry["row"], n])
+    return problems, changed, changed_rows, writes
+
+
 class SitesViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = MemberSerializer
@@ -486,7 +771,6 @@ class SitesViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="export", url_name="export-xlsx")
     def export(self, request):
-        from django.utils import timezone as tz
         qs = apply_status_filter(
             self.get_queryset(), self.request.query_params.get("status", "active")
         )
@@ -525,16 +809,15 @@ class SitesViewSet(viewsets.ModelViewSet):
         ws.title = "Sites"
         ws.append([c.replace("_", " ").title() for c in cols])
 
+        # C71/V74: one row per installed link of the exported sites, keyed
+        # `Member ID` + `Link ID`; `Lookup` lists the names import accepts.
+        # NOTE: `.iterator()` yields no `_result_cache`, so `Member ID` must
+        # come from the map collected during the loop below.
+        exported = {}
         for m in qs.iterator(chunk_size=500):
             network_name = m.network.name if m.network else ""
             network_group = m.network_group() or ""
-            is_online = "Online"
-            if m.offline_at is None:
-                is_online = "Online"
-            elif m.offline_at >= tz.now():
-                is_online = "Online"
-            else:
-                is_online = "Offline"
+            exported[m.id] = m.member_id
             row = {
                 "member_id": m.member_id,
                 "name": m.name,
@@ -554,12 +837,72 @@ class SitesViewSet(viewsets.ModelViewSet):
             }
             ws.append([row.get(c, "") for c in cols])
 
+        links_ws = wb.create_sheet("Links")
+        links_ws.append(["Member ID", "Link ID", "Role", "Service", "Provider", "CID", "SID"])
+        links = (
+            MemberLink.objects.filter(member_id__in=exported)
+            .select_related("role", "service", "provider")
+            .order_by("id")
+        )
+        for link in links:
+            links_ws.append(
+                [
+                    exported.get(link.member_id, ""),
+                    link.id,
+                    link.role.name if link.role else "",
+                    link.service.name if link.service else "",
+                    link.provider.name if link.provider else "",
+                    link.capacity or "",
+                    link.sid or "",
+                ]
+            )
+
+        lookup_ws = wb.create_sheet("Lookup")
+        lookup_ws.append(["Kind", "Name"])
+        for role in LinkRole.objects.order_by("name"):
+            lookup_ws.append(["Role", role.name])
+        for service in Links.objects.order_by("name"):
+            lookup_ws.append(["Service", service.name])
+        for provider in LinkProvider.objects.order_by("name"):
+            lookup_ws.append(["Provider", provider.name])
+
         response = HttpResponse(
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
         response["Content-Disposition"] = 'attachment; filename="sites.xlsx"'
         wb.save(response)
         return response
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="import/preview",
+        url_name="import-preview",
+        permission_classes=[IsAuthenticated, IsSuperUser],
+    )
+    def import_preview(self, request):
+        """V76: report every problem and change count, write nothing."""
+        problems, changed, rows, _writes = _apply_workbook(request, request.FILES.get("file"))
+        body = {"problems": problems, "changed": changed, "rows": rows}
+        return Response(body, status=400 if problems else 200)
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="import/apply",
+        url_name="import-apply",
+        permission_classes=[IsAuthenticated, IsSuperUser],
+    )
+    def import_apply(self, request):
+        """V76: re-validate the same upload, then write it in one transaction."""
+        problems, changed, rows, writes = _apply_workbook(request, request.FILES.get("file"))
+        body = {"problems": problems, "changed": changed, "rows": rows}
+        if problems:
+            return Response(body, status=400)
+        with transaction.atomic():
+            for write in writes:
+                write()
+        return Response(body)
 
     def get_serializer_class(self):
         return MemberSerializer

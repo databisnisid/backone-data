@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { ChevronDown, Download, Plus, Search, X } from "lucide-react";
+import { ChevronDown, Download, Plus, Search, Upload, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
@@ -29,6 +29,7 @@ import {
 
 import { fetchGroups, fetchMe, fetchProviders, fetchSites, patchSite } from "./api";
 import { CreateSiteDialog } from "./create-site-dialog";
+import { ImportDialog } from "./import-dialog";
 import {
   type ColVisibility,
   isExternalViewOnly,
@@ -192,6 +193,7 @@ export function SitesView() {
   const [editingId, setEditingId] = React.useState<number | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [createOpen, setCreateOpen] = React.useState(false);
+  const [importOpen, setImportOpen] = React.useState(false);
 
   React.useEffect(() => {
     fetchMe()
@@ -368,6 +370,11 @@ export function SitesView() {
               </a>
             </Button>
           )}
+          {me.is_superuser && (
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <Upload className="size-4" /> Import XLSX
+            </Button>
+          )}
         </div>
       </div>
 
@@ -483,6 +490,7 @@ export function SitesView() {
         <CardContent className="space-y-4 p-4">{body}</CardContent>
       </Card>
       <CreateSiteDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <ImportDialog open={importOpen} onOpenChange={setImportOpen} onImported={load} />
     </div>
   );
 }

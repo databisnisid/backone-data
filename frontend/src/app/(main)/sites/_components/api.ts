@@ -133,3 +133,22 @@ export async function deleteSiteLink(id: number) {
   const res = await fetch(`/api/backend/members/links/${id}/`, { method: "DELETE" });
   if (!res.ok) throw new Error(`Request failed (${res.status})`);
 }
+
+export type ImportProblem = { sheet: string; row: number; message: string };
+export type ImportResult = {
+  problems: ImportProblem[];
+  changed: Record<string, number>;
+  // [sheet, row number, changed-cell count] per row that would change (C73).
+  rows: [string, number, number][];
+};
+
+// V76/C72: preview and apply share one multipart body; a 400 carries the same
+// `problems` payload as a 200, so `jsonOrThrow` (detail-only) cannot be used.
+export async function importSitesXlsx(mode: "preview" | "apply", file: File): Promise<ImportResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`/api/backend/members/sites/import/${mode}/`, { method: "POST", body: form });
+  const body = (await res.json().catch(() => ({}))) as Partial<ImportResult> & { detail?: string };
+  if (Array.isArray(body.problems)) return body as ImportResult;
+  throw new Error(body.detail ?? `Request failed (${res.status})`);
+}

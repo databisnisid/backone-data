@@ -15,8 +15,16 @@ class MemberLinkSerializer(serializers.ModelSerializer):
         queryset=Links.objects.all(), required=False, allow_null=True
     )
     provider = serializers.SlugRelatedField(
-        slug_field="name", queryset=LinkProvider.objects.all(), required=True
+        slug_field="name", queryset=LinkProvider.objects.all(), required=True, allow_null=True
     )
+
+    def validate(self, attrs):
+        # C63/V67: a NEW link must carry a provider. An EXISTING one may clear
+        # it to NULL — the export writes a blank cell for a legacy link (C74),
+        # and the lookup rows are never fabricated.
+        if self.instance is None and attrs.get("provider") is None:
+            raise serializers.ValidationError({"provider": "Bidang ini wajib diisi."})
+        return attrs
 
     class Meta:
         model = MemberLink

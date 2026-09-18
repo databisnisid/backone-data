@@ -1251,3 +1251,201 @@ class NetworkGroupFilterTest(TestCase):
             # "Jawa Timur" holds no site at all, so it is correctly absent (C68).
             r.json(), ["Foreign Group", "Jawa Barat", "Tanpa Group"]
         )
+
+
+class SitesXlsxImportTest(TestCase):
+    """T75/T76: the XLSX round-trip importer. Cites C71-C74,V74-V77."""
+
+    SITE_HEADERS = ["Member ID", "Name", "Address", "Service Line", "IP Address", "Notes"]
+    LINK_HEADERS = ["Member ID", "Link ID", "Role", "Service", "Provider", "CID", "SID"]
+
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        from rest_framework.test import APIClient
+
+        from .models import LinkProvider, LinkRole, Links
+
+        self.client = APIClient()
+        org = Organizations.objects.create(name="Org")
+        net = Networks.objects.create(name="Net", network_id="NET1")
+        org.networks.add(net)
+        self.boss = User.objects.create_superuser(username="boss", password="pass1234")
+        self.finance = User.objects.create_user(
+            username="fin", password="pass1234", organization=org
+        )
+        self.finance.groups.add(Group.objects.get_or_create(name="Finance")[0])
+        self.site = Members.objects.create(
+            name="Synced Site", member_id="S1", is_manual=False, network=net, ip_address="10.0.0.1"
+        )
+        LinkRole.objects.get_or_create(name="MAIN")
+        LinkProvider.objects.get_or_create(name="TELKOM")
+        self.service = Links.objects.create(name="SVC")
+        self.link = MemberLink.objects.create(
+            member=self.site, role=LinkRole.objects.get(name="MAIN"),
+            provider=LinkProvider.objects.get(name="TELKOM"), service=self.service, sid="OLD",
+        )
+
+    def _book(self, sites=None, links=None, site_headers=None, link_headers=None):
+        import io
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from openpyxl import Workbook
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Sites"
+        ws.append(site_headers or self.SITE_HEADERS)
+        for row in sites or []:
+            ws.append(row)
+        lws = wb.create_sheet("Links")
+        lws.append(link_headers or self.LINK_HEADERS)
+        for row in links or []:
+            lws.append(row)
+        buf = io.BytesIO()
+        wb.save(buf)
+        return SimpleUploadedFile("sites.xlsx", buf.getvalue())
+
+    def _post(self, action, **kw):
+        self.client.force_authenticate(user=self.boss)
+        return self.client.post(
+            f"/api/members/sites/import/{action}/", {"file": self._book(**kw)}, format="multipart"
+        )
+
+    def test_non_superuser_is_rejected_by_both_actions(self):
+        # V76: DRF is the boundary; the FE gate is cosmetic.
+        self.client.force_authenticate(user=self.finance)
+        for action in ("preview", "apply"):
+            r = self.client.post(
+                f"/api/members/sites/import/{action}/",
+                {"file": self._book(sites=[["S1", "Synced Site", "", "", "10.0.0.1", ""]])},
+                format="multipart",
+            )
+            self.assertEqual(r.status_code, 403)
+
+    def test_preview_reports_counts_and_writes_nothing(self):
+        r = self._post(
+            "preview",
+            sites=[["S1", "Renamed", "", "", "10.9.9.9", "note"]],
+            links=[["S1", self.link.pk, "MAIN", "SVC", "TELKOM", "", "NEW"]],
+        )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["problems"], [])
+        # C73: per-sheet counts, and only the writable columns count. `Name` is
+        # core on a synced site, so it is skipped silently, not counted, not
+        # rejected.
+        self.assertEqual(body["changed"], {"Sites": 2, "Links": 1})
+        self.assertEqual(body["rows"], [["Sites", 2, 2], ["Links", 2, 1]])
+        self.site.refresh_from_db()
+        self.link.refresh_from_db()
+        self.assertEqual(self.site.ip_address, "10.0.0.1")
+        self.assertEqual(self.link.sid, "OLD")
+
+    def test_apply_writes_and_skips_core_columns_on_synced_site(self):
+        r = self._post(
+            "apply",
+            sites=[["S1", "Renamed", "New Addr", "", "10.9.9.9", "note"]],
+            links=[["S1", self.link.pk, "MAIN", "SVC", "TELKOM", "", "NEW"]],
+        )
+        self.assertEqual(r.status_code, 200)
+        self.site.refresh_from_db()
+        self.link.refresh_from_db()
+        self.assertEqual(self.site.ip_address, "10.9.9.9")
+        self.assertEqual(self.site.notes, "note")
+        self.assertEqual(self.link.sid, "NEW")
+        # V75: core columns (name/address) are neither applied nor rejected on
+        # a synced site — every superuser export carries them.
+        self.assertEqual(self.site.name, "Synced Site")
+        self.assertEqual(self.site.address, None)
+
+    def test_blank_cell_clears_existing_row_and_new_link_still_requires_provider(self):
+        r = self._post("apply", sites=[["S1", "Synced Site", "", "", "", ""]], links=[])
+        self.assertEqual(r.status_code, 200)
+        self.site.refresh_from_db()
+        self.assertEqual(self.site.ip_address, None)
+        # C74: on an EXISTING link row (`Link ID` filled) a blank cell clears
+        # the column to NULL — the export writes blanks for legacy links.
+        r = self._post("apply", links=[["S1", self.link.pk, "", "", "", "", "X"]])
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["problems"], [])
+        self.link.refresh_from_db()
+        self.assertIsNone(self.link.role)
+        self.assertIsNone(self.link.service)
+        self.assertIsNone(self.link.provider)
+        self.assertEqual(self.link.sid, "X")
+        # …but a NEW link (empty `Link ID`) still needs its provider (C63/V67).
+        r = self._post("apply", links=[["S1", "", "MAIN", "SVC", "", "", "X2"]])
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(MemberLink.objects.filter(sid="X2").count(), 0)
+
+    def test_apply_rejects_whole_file_when_a_row_is_clean_but_another_is_not(self):
+        r = self._post(
+            "apply",
+            sites=[["S1", "Synced Site", "", "", "10.9.9.9", ""]],
+            links=[["S1", "", "MAIN", "SVC", "TELKOM-X", "", "X"]],
+        )
+        self.assertEqual(r.status_code, 400)
+        self.assertTrue(r.json()["problems"])
+        self.site.refresh_from_db()
+        self.assertEqual(self.site.ip_address, "10.0.0.1")  # the clean row too
+
+    def test_missing_provider_column_rejects_but_unknown_column_imports(self):
+        # V77: a missing `Provider` column would silently clear every provider,
+        # so the whole file is rejected — even though the row it carries would
+        # otherwise be an ordinary blank-means-clear update.
+        r = self._post(
+            "apply",
+            links=[["S1", self.link.pk, "MAIN", "SVC", "TELKOM", "X"]],
+            link_headers=["Member ID", "Link ID", "Role", "Service", "CID", "SID"],
+        )
+        self.assertEqual(r.status_code, 400)
+        self.link.refresh_from_db()
+        self.assertEqual(self.link.provider.name, "TELKOM")
+        # …while an unrecognized extra column is ignored and the file imports.
+        r = self._post(
+            "apply",
+            sites=[["S1", "Synced Site", "", "", "10.9.9.9", "note", "zzz"]],
+            site_headers=self.SITE_HEADERS + ["Future Col"],
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["problems"], [])
+
+    def test_reimport_of_unchanged_file_reports_no_change_and_writes_nothing(self):
+        r = self._post(
+            "apply",
+            links=[["S1", self.link.pk, "MAIN", "SVC", "TELKOM", "", "OLD"]],
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["changed"], {"Sites": 0, "Links": 0})
+        self.assertEqual(r.json()["rows"], [])
+
+    def test_unknown_member_id_and_open_link_id_create(self):
+        # C71: a row naming no site is rejected — import never creates sites.
+        r = self._post("apply", sites=[["NOPE", "X", "", "", "", ""]])
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(Members.objects.filter(member_id="NOPE").count(), 0)
+        # C71/V74: an empty `Link ID` always creates a link, never matched by role.
+        r = self._post("apply", links=[["S1", "", "MAIN", "SVC", "TELKOM", "", "BRAND-NEW"]])
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(MemberLink.objects.filter(sid="BRAND-NEW").count(), 1)
+        self.assertTrue(MemberLink.objects.filter(pk=self.link.pk, sid="OLD").exists())
+
+    def test_role_gate_applies_to_whatever_caller_reaches_it(self):
+        # V75: the gate is the same `writable_fields` set the web API uses, so a
+        # Finance-only caller importing `ip_address` changes nothing and is not
+        # rejected for it. (HTTP is superuser-only, so drive the gate directly.)
+        from types import SimpleNamespace
+
+        from .apis import _apply_workbook
+
+        request = SimpleNamespace(user=self.finance, method="POST")
+        upload = self._book(sites=[["S1", "Synced Site", "", "", "10.9.9.9", "fin-note"]])
+        problems, changed, rows, writes = _apply_workbook(request, upload)
+        self.assertEqual(problems, [])
+        for write in writes:
+            write()
+        self.site.refresh_from_db()
+        self.assertEqual(self.site.ip_address, "10.0.0.1")  # not writable for Finance
+        self.assertEqual(self.site.notes, "fin-note")  # writable for Finance
+        self.assertEqual(changed, {"Sites": 1, "Links": 0})
+        self.assertEqual(rows, [["Sites", 2, 1]])
