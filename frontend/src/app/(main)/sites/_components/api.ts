@@ -15,6 +15,8 @@ export async function fetchSites(params: {
   page: number;
   search?: string;
   providers?: string[];
+  // C65: repeatable, ORed across selected groups. Names, not ids (C65).
+  groups?: string[];
   // V62: slice links carry these, so the grid's count matches the pie slice.
   sdwan?: string;
   status?: string;
@@ -28,6 +30,7 @@ export async function fetchSites(params: {
   if (params.sdwan) q.set("sdwan", params.sdwan);
   if (params.status) q.set("status", params.status);
   for (const n of params.networks ?? []) q.append("network", n);
+  for (const g of params.groups ?? []) q.append("group", g);
   const res = await fetch(`/api/backend/members/sites?${q.toString()}`);
   return jsonOrThrow<Page<SiteRow>>(res);
 }
@@ -99,6 +102,11 @@ export async function fetchMemberOptions() {
 
 export async function fetchProviders() {
   const res = await fetch("/api/backend/members/sites/providers/");
+  return jsonOrThrow<string[]>(res);
+}
+
+export async function fetchGroups() {
+  const res = await fetch("/api/backend/members/sites/groups/");
   return jsonOrThrow<string[]>(res);
 }
 

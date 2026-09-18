@@ -27,7 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-import { fetchMe, fetchProviders, fetchSites, patchSite } from "./api";
+import { fetchGroups, fetchMe, fetchProviders, fetchSites, patchSite } from "./api";
 import { CreateSiteDialog } from "./create-site-dialog";
 import {
   type ColVisibility,
@@ -180,6 +180,9 @@ export function SitesView() {
   const [page, setPage] = React.useState(1);
   const [search, setSearch] = React.useState("");
   const [providers, setProviders] = React.useState<string[]>([]);
+  // C65: seeded from `?group=` once and never written back — like the provider
+  // dropdown (T62), this control does not drive the address bar.
+  const [groups, setGroups] = React.useState<string[]>([]);
   // V62: slice links land here as `/sites?sdwan=<name>&status=active`. Seeded
   // once from the URL and never written back — `status` stays URL-only, so no
   // visible status control returns (C52).
@@ -189,6 +192,8 @@ export function SitesView() {
   // V63: `Top Networks` rows land here as `/sites?network=<id>` — repeatable,
   // like the `?network=` site picker (V34). Seeded once, never written back.
   const [networks] = React.useState(() => searchParams.getAll("network"));
+  const [groupsSeed] = React.useState(() => searchParams.getAll("group"));
+  const [groupOptions, setGroupOptions] = React.useState<string[]>([]);
   const [providerOptions, setProviderOptions] = React.useState<string[]>([]);
   const [editingId, setEditingId] = React.useState<number | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -206,10 +211,21 @@ export function SitesView() {
       .catch((e) => toast.error((e as Error).message));
   }, []);
 
+  React.useEffect(() => {
+    fetchGroups()
+      .then((g) => {
+        setGroupOptions(g);
+        // C65/V70: only names the server offers are selected; an unknown name
+        // in the URL would otherwise silently narrow to an empty grid.
+        setGroups(groupsSeed.filter((name) => g.includes(name)));
+      })
+      .catch((e) => toast.error((e as Error).message));
+  }, [groupsSeed]);
+
   const load = React.useCallback(async () => {
     setLoading(true);
     try {
-      const data = await fetchSites({ page, search, providers, sdwan, status, networks });
+      const data = await fetchSites({ page, search, providers, groups, sdwan, status, networks });
       setRows(data.results);
       setTotal(data.count);
     } catch (e) {
@@ -217,7 +233,7 @@ export function SitesView() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, providers, sdwan, status, networks]);
+  }, [page, search, providers, groups, sdwan, status, networks]);
 
   React.useEffect(() => {
     void load();
@@ -419,6 +435,46 @@ export function SitesView() {
                 <DropdownMenuItem
                   onSelect={() => {
                     setProviders([]);
+                    setPage(1);
+                  }}
+                >
+                  <X className="size-4" /> Reset
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="w-48 justify-between font-normal">
+              {groups.length === 0 ? "Semua Group" : `${groups.length} Group`}
+              <ChevronDown className="size-4 opacity-50" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
+            {groupOptions.length === 0 && (
+              <div className="px-2 py-1.5 text-sm text-muted-foreground">Tidak ada group.</div>
+            )}
+            {groupOptions.map((g) => (
+              <DropdownMenuCheckboxItem
+                key={g}
+                checked={groups.includes(g)}
+                onSelect={(e) => e.preventDefault()}
+                onCheckedChange={(on) => {
+                  setGroups((prev) => (on ? [...prev, g] : prev.filter((x) => x !== g)));
+                  setPage(1);
+                }}
+              >
+                {g}
+              </DropdownMenuCheckboxItem>
+            ))}
+            {groups.length > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setGroups([]);
                     setPage(1);
                   }}
                 >

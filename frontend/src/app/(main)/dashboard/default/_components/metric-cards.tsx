@@ -5,51 +5,17 @@ import { useState } from "react";
 import { ChevronDown, Globe, HardDrive, Wifi, WifiOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Cell, Pie, PieChart } from "recharts";
-import { toast } from "sonner";
+
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
-type Stats = {
-  total_sites: number;
-  online_sites: number;
-  offline_sites: number;
-  manual_sites: number;
-  // C60/V63: every network holding >=1 site (never a zero-site one), each
-  // carrying its id so a row can drill into /sites?network=<id>.
-  top_networks: Array<{ id: number; name: string; sites: number }>;
-  // T57/C51: provider rows are DISTINCT-site counts; "Tanpa Link" is the
-  // full-role-set complement, so it partitions `total_sites` exactly.
-  provider_breakdown: Array<{ provider: string; count: number }>;
-  // C58/V61: distinct-site counts per SDWAN package over the ACTIVE scope, so
-  // the slices partition `online_sites` exactly.
-  sdwan_breakdown: Array<{ package: string; count: number }>;
-};
-
-let statsPromise: Promise<Stats> | null = null;
-
-function fetchStats(): Promise<Stats> {
-  statsPromise ??= fetch("/api/backend/members/sites/stats", { cache: "no-store" })
-    .then(async (res) => {
-      if (!res.ok) throw new Error("Gagal memuat statistik situs.");
-      return (await res.json()) as Stats;
-    })
-    .finally(() => {
-      statsPromise = null;
-    });
-  return statsPromise;
-}
+import { type Stats, useStats } from "./stats";
 
 export function MetricCards() {
-  const [stats, setStats] = useState<Stats | null>(null);
-
-  useState(() => {
-    void fetchStats()
-      .then(setStats)
-      .catch((e) => toast.error((e as Error).message));
-  });
+  const stats = useStats();
 
   if (!stats) {
     return (
@@ -124,15 +90,9 @@ export function MetricCards() {
 const TOP_NETWORKS_VISIBLE = 10;
 
 export function TopNetworks() {
-  const [stats, setStats] = useState<Stats | null>(null);
+  const stats = useStats();
   const [open, setOpen] = useState(false);
   const router = useRouter();
-
-  useState(() => {
-    void fetchStats()
-      .then(setStats)
-      .catch((e) => toast.error((e as Error).message));
-  });
 
   const nets = stats?.top_networks ?? [];
   const hidden = nets.slice(TOP_NETWORKS_VISIBLE);
@@ -212,13 +172,7 @@ export function TopNetworks() {
 }
 
 export function ProviderBreakdown() {
-  const [stats, setStats] = useState<Stats | null>(null);
-
-  useState(() => {
-    void fetchStats()
-      .then(setStats)
-      .catch((e) => toast.error((e as Error).message));
-  });
+  const stats = useStats();
 
   // C46: bars scale to the summed displayed rows, so they total 100% and the
   // small real providers stay legible next to the dominant "Tanpa Link" row.
@@ -278,13 +232,7 @@ export function ProviderBreakdown() {
 // this card is NOT behind the C43/C49 internal-only gate.
 export function SdwanBreakdown() {
   const router = useRouter();
-  const [stats, setStats] = useState<Stats | null>(null);
-
-  useState(() => {
-    void fetchStats()
-      .then(setStats)
-      .catch((e) => toast.error((e as Error).message));
-  });
+  const stats = useStats();
 
   const rows = stats?.sdwan_breakdown ?? [];
   // V61: every site carries exactly one package (single-valued FK, NULLs

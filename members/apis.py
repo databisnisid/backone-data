@@ -153,6 +153,135 @@ def apply_provider_filter(qs, providers):
         predicate |= clause
     return qs.filter(predicate)
 
+NO_GROUP = "Tanpa Group"  # C67 sentinel: sites in no group by either leg
+
+
+def group_legs(lookup, value):
+    """The ONE definition of group membership — C66/V68.
+
+    A site belongs to a group through the network FK OR the direct M2M.
+    `lookup` is the suffix applied to each leg (`"name"`, `"name__in"`,
+    `"pk"`), so the filter, the dashboard card and `/networks`' own
+    `NetworksGroupSerializer.get_sites` all resolve membership through this
+    one expression rather than three copies that can drift.
+    """
+    return Q(**{f"network__network_group__{lookup}": value}) | Q(
+        **{f"network_groups__{lookup}": value}
+    )
+
+
+# Resolved membership is an `Exists()` predicate on the site's pk, NOT a filter
+# joining `network_groups`: that M2M join returns one row per matched
+# attachment, so a site attached through both legs would multiply rows and
+# inflate the C13 page count and `total_sites`. EXISTS only asks whether such a
+# row exists, so duplicates are structurally impossible — no `.distinct()`.
+
+
+def _named_group_exists(names):
+    """`Exists()` predicate: the site sits in any of `names` (C66/V68)."""
+    return Exists(
+        Members.objects.filter(group_legs("name__in", names), pk=OuterRef("pk"))
+    )
+
+
+def _ungrouped_exists():
+    """`Exists()` predicate: the site sits in no group by either leg (C67)."""
+    return Exists(
+        Members.objects.filter(group_legs("isnull", False), pk=OuterRef("pk"))
+    )
+
+
+def group_members_filter(qs, name):
+    """The sites of `qs` in group `name` (C66/V68)."""
+    return qs.filter(_named_group_exists([name]))
+
+
+def ungrouped_filter(qs):
+    """The sites of `qs` in NO group by either leg — the sentinel (C67,V69).
+
+    Complement against the same scope, so this and "in at least one group"
+    partition the role set exactly.
+    """
+    return qs.filter(~_ungrouped_exists())
+
+
+def apply_group_filter(qs, groups):
+    """?group=A&group=B on the sites list — C65, C66, V70.
+
+    Selections OR within the group dimension; the sentinel ORs in like any
+    other name.
+    """
+    # V56/V70: an empty selection is a no-op, never an empty grid. Blank values
+    # are dropped too, so a stray `?group=` cannot mean "sites with no group".
+    groups = [g for g in groups if g]
+    if not groups:
+        return qs
+    named = [g for g in groups if g != NO_GROUP]
+    clauses = []
+    if named:
+        clauses.append(_named_group_exists(named))
+    if NO_GROUP in groups:
+        clauses.append(~_ungrouped_exists())
+    predicate = clauses[0]
+    for clause in clauses[1:]:
+        predicate |= clause
+    return qs.filter(predicate)
+
+
+def group_names(qs):
+    """Group names present in `qs`, both legs, row-derived (C68)."""
+    names = set(
+        qs.exclude(network__network_group__isnull=True).values_list(
+            "network__network_group__name", flat=True
+        )
+    )
+    names.update(
+        qs.exclude(network_groups__isnull=True).values_list("network_groups__name", flat=True)
+    )
+    return sorted(names)
+
+
+def group_options(user):
+    """Distinct group names over the caller's OWN sites (C68,V72).
+
+    Never `NetworksGroup.objects`: a tenant sees only the groups its own sites
+    belong to, an empty group is absent (2 in prod), and no other org's group
+    name can surface.
+    """
+    return group_names(member_queryset_for(user))
+
+
+def group_counts(scope, now):
+    """Per-group counters, sentinel pinned last (C22,C66,C67,V69).
+
+    A site attached through both legs belongs to both groups, matching
+    `/networks`; that is a partition of the role set only in the sense that
+    `sum(total_sites) == total_sites` for the sentinel-plus-named split,
+    because `Tanpa Group` is the complement of `_IN_ANY_GROUP`.
+
+    ponytail: one aggregate query per group plus one for the sentinel — 14
+    groups in prod, so ~15 queries per `stats` call. Collapse into a single
+    union query if the group count or dashboard load grows.
+    """
+
+    def counts(qs):
+        return qs.aggregate(
+            total_sites=Count("id"),
+            baa_sites=Count("id", filter=~Q(upload_baa="")),
+            invoice_sites=Count(
+                "id", filter=~Q(invoice_number__isnull=True) & ~Q(invoice_number="")
+            ),
+            dismantle_sites=Count(
+                "id", filter=Q(offline_at__isnull=False) & Q(offline_at__lte=now)
+            ),
+        )
+
+    rows = [
+        {"network_group": name, **counts(group_members_filter(scope, name))}
+        for name in group_names(scope)
+    ]
+    rows.append({"network_group": NO_GROUP, **counts(ungrouped_filter(scope))})
+    return rows
 
 def provider_breakdown(qs):
     """Distinct-site counts per provider over the viewer's role scope (C51/V57).
@@ -231,6 +360,7 @@ class SitesViewSet(viewsets.ModelViewSet):
             if nets:
                 qs = qs.filter(network_id__in=nets)
             qs = apply_provider_filter(qs, self.request.query_params.getlist("provider"))
+            qs = apply_group_filter(qs, self.request.query_params.getlist("group"))
             qs = apply_sdwan_filter(qs, self.request.query_params.get("sdwan"))
         return qs
 
@@ -270,7 +400,9 @@ class SitesViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="stats")
     def stats(self, request):
-        qs = member_queryset_for(request.user)
+        qs = apply_group_filter(
+            member_queryset_for(request.user), request.query_params.getlist("group")
+        )
         now = timezone.now()
         total = qs.count()
         online = active_members_queryset(qs).count()
@@ -286,17 +418,11 @@ class SitesViewSet(viewsets.ModelViewSet):
             .annotate(count=Count("id"))
             .order_by("-count")
         )
-        groups = (
-            qs.exclude(network__network_group__isnull=True)
-            .values("network__network_group__name")
-            .annotate(
-                total=Count("id"),
-                baa=Count("id", filter=~Q(upload_baa="")),
-                invoice=Count("id", filter=~Q(invoice_number__isnull=True) & ~Q(invoice_number="")),
-                dismantle=Count("id", filter=Q(offline_at__isnull=False) & Q(offline_at__lte=now)),
-            )
-            .order_by("network__network_group__name")
-        )
+        # C65/V71: the header picker's own option list comes from THIS payload,
+        # so `group_aggregates` is deliberately computed over the org scope
+        # rather than the narrowed `qs` — otherwise selecting one group would
+        # erase every other group from the dropdown (T71: no second fetch).
+        groups = group_counts(member_queryset_for(request.user), now)
         return Response(
             {
                 "total_sites": total,
@@ -311,20 +437,12 @@ class SitesViewSet(viewsets.ModelViewSet):
                     }
                     for n in nets
                 ],
-                "group_aggregates": [
-                    {
-                        "network_group": g["network__network_group__name"],
-                        "total_sites": g["total"],
-                        "baa_sites": g["baa"],
-                        "invoice_sites": g["invoice"],
-                        "dismantle_sites": g["dismantle"],
-                    }
-                    for g in groups
-                ],
+                "group_aggregates": groups,
                 "provider_breakdown": provider_breakdown(qs),
                 "sdwan_breakdown": sdwan_breakdown(qs),
             }
         )
+
     @action(detail=False, methods=["get"], url_path="options")
     def options(self, request):
         """Return the lookup option lists (sdwan/baa/role/provider names) for the FE selects (C25,C61)."""
@@ -355,6 +473,16 @@ class SitesViewSet(viewsets.ModelViewSet):
         reachable (1226 of 1228 prod sites).
         """
         return Response(link_providers(request.user) + [NO_LINK])
+
+    @action(detail=False, methods=["get"], url_path="groups")
+    def groups(self, request):
+        """Distinct group names the caller's own sites belong to (C67,C68,V72).
+
+        Scoped by member_queryset_for — a tenant never learns another org's
+        group names. The C67 sentinel is appended so ungrouped sites stay
+        reachable (9 of 1270 prod sites).
+        """
+        return Response(group_options(request.user) + [NO_GROUP])
 
     @action(detail=False, methods=["get"], url_path="export", url_name="export-xlsx")
     def export(self, request):

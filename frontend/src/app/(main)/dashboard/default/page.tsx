@@ -8,6 +8,7 @@ import {
   TopNetworks,
 } from "./_components/metric-cards";
 import { StatusOverview } from "./_components/status-overview";
+import { GroupFilter } from "./_components/group-filter";
 
 export default async function Page() {
   // C43/C49: provider panel is internal-only. Deny-only — External keeps the
@@ -17,6 +18,9 @@ export default async function Page() {
 
   return (
     <div className="@container/main flex flex-col gap-4 md:gap-6">
+      {/* C69: outside the C43/C49 gate — every viewer including External gets
+          the picker; the backend's org scope is the only fence. */}
+      <GroupFilter />
       <MetricCards />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 md:gap-6">
         <div className="lg:col-span-2">

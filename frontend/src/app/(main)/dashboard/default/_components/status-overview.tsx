@@ -1,49 +1,12 @@
 "use client";
 
-import { useState } from "react";
-
-import { toast } from "sonner";
-
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-type Stats = {
-  total_sites: number;
-  online_sites: number;
-  offline_sites: number;
-  manual_sites: number;
-  top_networks: Array<{ id: number; name: string; sites: number }>;
-  group_aggregates?: Array<{
-    network_group: string;
-    total_sites: number;
-    baa_sites: number;
-    invoice_sites: number;
-    dismantle_sites: number;
-  }>;
-};
-
-let statsPromise: Promise<Stats> | null = null;
-
-function fetchStats(): Promise<Stats> {
-  statsPromise ??= fetch("/api/backend/members/sites/stats", { cache: "no-store" })
-    .then(async (res) => {
-      if (!res.ok) throw new Error("Gagal memuat statistik situs.");
-      return (await res.json()) as Stats;
-    })
-    .finally(() => {
-      statsPromise = null;
-    });
-  return statsPromise;
-}
+import { useStats } from "./stats";
 
 export function StatusOverview() {
-  const [stats, setStats] = useState<Stats | null>(null);
-
-  useState(() => {
-    void fetchStats()
-      .then(setStats)
-      .catch((e) => toast.error((e as Error).message));
-  });
+  const stats = useStats();
 
   if (!stats) {
     return (
@@ -82,9 +45,7 @@ export function StatusOverview() {
         <div className="flex items-center justify-between gap-2">
           <span className="text-muted-foreground text-sm">Tingkat ketersediaan</span>
           <Badge variant={stats.online_sites > 0 ? "default" : "secondary"} className="tabular-nums">
-            {stats.total_sites
-              ? `${Math.round((stats.online_sites / stats.total_sites) * 100)}%`
-              : "-"}
+            {stats.total_sites ? `${Math.round((stats.online_sites / stats.total_sites) * 100)}%` : "-"}
           </Badge>
         </div>
 

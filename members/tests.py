@@ -1030,3 +1030,224 @@ class TopNetworksTest(TestCase):
             r = self.api.get("/api/members/sites/", {"network": row["id"]})
             self.assertEqual(r.status_code, 200)
             self.assertEqual(r.json()["count"], row["sites"], row["name"])
+
+
+class NetworkGroupFilterTest(TestCase):
+    """T68: network-group filtering on /sites + the dashboard. Cites C65-C69,V68-V72."""
+
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        from rest_framework.test import APIClient
+        from networks.models import NetworksGroup
+        from .models import LinkRole, LinkProvider
+
+        self.api = APIClient()
+        self.role, _ = LinkRole.objects.get_or_create(name="MAIN")
+        self.telkom, _ = LinkProvider.objects.get_or_create(name="TELKOM")
+
+        self.org_a = Organizations.objects.create(name="OrgA")
+        self.org_b = Organizations.objects.create(name="OrgB")
+        self.grp_a = NetworksGroup.objects.create(name="Jawa Barat")
+        self.grp_b = NetworksGroup.objects.create(name="Jawa Timur")
+        self.grp_foreign = NetworksGroup.objects.create(name="Foreign Group")
+        self.grp_empty = NetworksGroup.objects.create(name="No Sites")
+
+        # Org A: one grouped network, one ungrouped network / "Jawa Barat" the left arm.
+        self.net_grouped = Networks.objects.create(
+            name="NetGrouped", network_id="NG", network_group=self.grp_a
+        )
+        self.net_bare = Networks.objects.create(name="NetBare", network_id="NB")
+        self.org_a.networks.add(self.net_grouped, self.net_bare)
+        # Org B holds the other two groups.
+        self.net_b = Networks.objects.create(
+            name="NetB", network_id="NB2", network_group=self.grp_b
+        )
+        self.net_foreign = Networks.objects.create(
+            name="NetForeign", network_id="NF", network_group=self.grp_foreign
+        )
+        self.org_b.networks.add(self.net_b, self.net_foreign)
+
+        # Via the network FK only.
+        self.via_network = Members.objects.create(
+            name="ViaNetwork", member_id="V1", network=self.net_grouped
+        )
+        # Via the direct M2M only — the leg a network-only rule would miss (C66).
+        self.via_m2m = Members.objects.create(
+            name="ViaM2M", member_id="V2", network=self.net_bare
+        )
+        self.grp_a.member_sites.add(self.via_m2m)
+        # Through BOTH legs — the duplication trap (V56/V68).
+        self.doubled = Members.objects.create(
+            name="Doubled", member_id="V3", network=self.net_grouped
+        )
+        self.grp_a.member_sites.add(self.doubled)
+        # No group at all → the sentinel.
+        self.ungrouped = Members.objects.create(
+            name="Ungrouped", member_id="U1", network=self.net_bare
+        )
+        # Second ungrouped org-A site that CARRIES a link and is dismantled, so
+        # the same group selection proves both V71 halves at once.
+        self.dead = Members.objects.create(
+            name="Dead", member_id="U2", network=self.net_bare,
+            offline_at=timezone.now() - timedelta(days=1),
+        )
+        MemberLink.objects.create(
+            sid="SD", member=self.dead, role=self.role, provider=self.telkom
+        )
+        # Org B site inside org A's group name space is impossible (names differ);
+        # org B sites exist to prove the org fence.
+        Members.objects.create(name="Foreign", member_id="F1", network=self.net_foreign)
+
+        self.user = User.objects.create_user(
+            username="groupa", password="pass1234", organization=self.org_a
+        )
+        self.user.groups.add(Group.objects.get_or_create(name="External")[0])
+        self.api.force_authenticate(self.user)
+
+    @staticmethod
+    def _ids(response):
+        return {row["member_id"] for row in response.json()["results"]}
+
+    def _stats(self, **params):
+        r = self.api.get("/api/members/sites/stats/", params)
+        self.assertEqual(r.status_code, 200)
+        return r.json()
+
+    # --- V68: one definition of membership, both legs, no duplication -------
+
+    def test_direct_m2m_site_is_a_member(self):
+        r = self.api.get("/api/members/sites/", {"group": ["Jawa Barat"]})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(self._ids(r), {"V1", "V2", "V3"})
+
+    def test_site_on_both_legs_appears_once(self):
+        # V56/V68: a bare reverse-FK join would emit V3 twice, inflating the
+        # C13 page count and `total_sites`.
+        r = self.api.get("/api/members/sites/", {"group": ["Jawa Barat"]})
+        self.assertEqual(r.json()["count"], 3)
+        rows = r.json()["results"]
+        self.assertEqual([row["member_id"] for row in rows].count("V3"), 1)
+
+    def test_grid_count_equals_the_stats_row(self):
+        # V68: the card and the grid it opens must report the same number.
+        row = {g["network_group"]: g for g in self._stats()["group_aggregates"]}[
+            "Jawa Barat"
+        ]
+        r = self.api.get("/api/members/sites/", {"group": ["Jawa Barat"]})
+        self.assertEqual(r.json()["count"], row["total_sites"])
+
+    # --- V69: named groups + sentinel partition the role set ----------------
+
+    def test_tanpa_group_selects_only_ungrouped_sites(self):
+        r = self.api.get("/api/members/sites/", {"group": ["Tanpa Group"]})
+        self.assertEqual(self._ids(r), {"U1", "U2"})
+
+    def test_named_selection_never_includes_ungrouped(self):
+        r = self.api.get("/api/members/sites/", {"group": ["Jawa Barat"]})
+        self.assertNotIn("U1", self._ids(r))
+        self.assertNotIn("U2", self._ids(r))
+
+    def test_sentinel_ors_with_a_named_group(self):
+        r = self.api.get("/api/members/sites/", {"group": ["Jawa Barat", "Tanpa Group"]})
+        self.assertEqual(self._ids(r), {"V1", "V2", "V3", "U1", "U2"})
+
+    def test_group_aggregates_partition_total_sites(self):
+        stats = self._stats()
+        self.assertEqual(
+            sum(g["total_sites"] for g in stats["group_aggregates"]),
+            stats["total_sites"],
+        )
+
+    def test_ungrouped_site_moves_into_the_sentinel_when_its_network_is_ungrouped(self):
+        # V69: `Networks.network_group` is SET_NULL, so the site must leave the
+        # named row and land in the sentinel — not vanish.
+        self.net_grouped.network_group = None
+        self.net_grouped.save()
+        rows = {g["network_group"]: g["total_sites"] for g in self._stats()["group_aggregates"]}
+        # V1 reached the group only through the network FK, so it must land in
+        # the sentinel; V2/V3 keep their direct M2M attachment.
+        self.assertEqual(rows["Jawa Barat"], 2)
+        self.assertEqual(rows["Tanpa Group"], 3)
+
+    def test_sentinel_row_is_last_and_never_a_networksgroup_row(self):
+        from networks.models import NetworksGroup
+
+        names = [g["network_group"] for g in self._stats()["group_aggregates"]]
+        self.assertEqual(names[-1], "Tanpa Group")
+        self.assertFalse(NetworksGroup.objects.filter(name="Tanpa Group").exists())
+
+    # --- V70: composes, never replaces; empty is a no-op --------------------
+
+    def test_empty_selection_is_noop(self):
+        r = self.api.get("/api/members/sites/", {"group": []})
+        self.assertEqual(self._ids(r), {"V1", "V2", "V3", "U1", "U2"})
+
+    def test_blank_group_value_is_dropped(self):
+        r = self.api.get("/api/members/sites/", {"group": [""]})
+        self.assertEqual(self._ids(r), {"V1", "V2", "V3", "U1", "U2"})
+
+    def test_unknown_group_name_yields_an_empty_grid(self):
+        # Never the unfiltered qs — a typed name must not silently widen.
+        r = self.api.get("/api/members/sites/", {"group": ["Nope"]})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["count"], 0)
+
+    def test_composes_with_status(self):
+        r = self.api.get("/api/members/sites/", {"group": ["Tanpa Group"], "status": "active"})
+        self.assertEqual(self._ids(r), {"U1"})
+
+    # --- V71: narrows the card, never changes what it counts ----------------
+
+    def test_stats_narrow_to_the_selection(self):
+        stats = self._stats(group=["Jawa Barat"])
+        self.assertEqual(stats["total_sites"], 3)
+        self.assertEqual(stats["online_sites"], 3)
+
+    def test_group_selection_still_counts_the_dismantled_site(self):
+        stats = self._stats(group=["Tanpa Group"])
+        self.assertEqual(stats["total_sites"], 2)
+        self.assertEqual(stats["online_sites"], 1)
+
+    def test_provider_card_stays_active_only_under_a_group_selection(self):
+        # V71 + C50/V58: the group filter narrows the scope, it does not flip
+        # the provider card to the full role set — the dismantled site holds a
+        # TELKOM link yet must contribute no named row.
+        stats = self._stats(group=["Tanpa Group"])
+        self.assertEqual([r["provider"] for r in stats["provider_breakdown"]], ["Tanpa Link"])
+        self.assertEqual(stats["provider_breakdown"][0]["count"], 2)
+
+    def test_dashboard_option_list_survives_a_selection(self):
+        # C65/V71: `group_aggregates` feeds the picker itself, so selecting one
+        # group must not erase the others from the dropdown.
+        names = [g["network_group"] for g in self._stats(group=["Jawa Barat"])["group_aggregates"]]
+        self.assertEqual(names, ["Jawa Barat", "Tanpa Group"])
+
+    # --- V72: org fence, sentinel always offered, no gating -----------------
+
+    def test_groups_action_is_scoped_to_own_org(self):
+        r = self.api.get("/api/members/sites/groups/")
+        self.assertEqual(r.status_code, 200)
+        # "Foreign Group" and "Jawa Timur" hold no org-A site; "No Sites" holds
+        # none at all; the sentinel is always offered (C68/V72).
+        self.assertEqual(r.json(), ["Jawa Barat", "Tanpa Group"])
+
+    def test_groups_action_has_no_external_gate(self):
+        # C69/V72: the External viewer is the one this test authenticates as.
+        self.assertEqual(self.api.get("/api/members/sites/groups/").status_code, 200)
+
+    def test_org_group_name_does_not_leak_into_aggregates(self):
+        names = [g["network_group"] for g in self._stats()["group_aggregates"]]
+        self.assertNotIn("Foreign Group", names)
+        self.assertNotIn("Jawa Timur", names)
+
+    def test_superuser_sees_every_group(self):
+        boss = User.objects.create_superuser(username="bossg", password="pass1234")
+        from rest_framework.test import APIClient
+
+        c = APIClient()
+        c.force_authenticate(boss)
+        r = c.get("/api/members/sites/groups/")
+        self.assertEqual(
+            # "Jawa Timur" holds no site at all, so it is correctly absent (C68).
+            r.json(), ["Foreign Group", "Jawa Barat", "Tanpa Group"]
+        )

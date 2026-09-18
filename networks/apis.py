@@ -3,6 +3,7 @@ from django.db.models import Q
 from rest_framework import serializers, viewsets
 from rest_framework.permissions import BasePermission, IsAuthenticated, SAFE_METHODS
 from members.models import Members
+from members.apis import group_legs
 from members.rbac import sees_all_sites
 from .models import Networks, NetworksGroup
 
@@ -50,7 +51,7 @@ class NetworksGroupSerializer(serializers.ModelSerializer):
     def get_sites(self, obj):
         # Org-scoped count — same leak class as member_sites_detail.
         return (
-            Members.objects.filter(Q(network__network_group=obj) | Q(network_groups=obj))
+            Members.objects.filter(group_legs("pk", obj.pk))
             .filter(_org_scope(self.context.get("request")))
             .distinct()
             .count()
