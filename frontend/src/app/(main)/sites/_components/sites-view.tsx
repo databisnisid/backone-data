@@ -3,7 +3,7 @@
 import * as React from "react";
 
 import { ChevronDown, Download, Plus, Search, Upload, X } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -169,6 +169,7 @@ function headersFor(cols: ColVisibility): string[] {
 }
 
 export function SitesView() {
+  const router = useRouter();
   const [me, setMe] = React.useState<Me | null>(null);
   const [rows, setRows] = React.useState<SiteRow[]>([]);
   const [total, setTotal] = React.useState(0);
@@ -198,8 +199,16 @@ export function SitesView() {
   React.useEffect(() => {
     fetchMe()
       .then((m) => setMe(m))
-      .catch((e) => toast.error((e as Error).message));
-  }, []);
+      .catch((e) => {
+        // V82: a dead session used to leave this page on "Loading session..."
+        // forever; send it to the login screen instead.
+        if ((e as { status?: number }).status === 401) {
+          router.replace("/auth/v1/login?next=/sites");
+          return;
+        }
+        toast.error((e as Error).message);
+      });
+  }, [router]);
 
   React.useEffect(() => {
     fetchProviders()

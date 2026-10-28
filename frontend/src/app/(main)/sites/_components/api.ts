@@ -2,7 +2,13 @@ import type { Page, SiteLink, SiteRow } from "./data";
 
 async function jsonOrThrow<T>(res: Response): Promise<T> {
   const body = (await res.json().catch(() => ({}))) as { detail?: string };
-  if (!res.ok) throw new Error(body.detail ?? `Request failed (${res.status})`);
+  if (!res.ok) {
+    // Status travels with the error so a caller can tell "session gone" from
+    // "server said no" (V82).
+    throw Object.assign(new Error(body.detail ?? `Request failed (${res.status})`), {
+      status: res.status,
+    });
+  }
   return body as T;
 }
 
