@@ -152,3 +152,31 @@ export async function importSitesXlsx(mode: "preview" | "apply", file: File): Pr
   if (Array.isArray(body.problems)) return body as ImportResult;
   throw new Error(body.detail ?? `Request failed (${res.status})`);
 }
+
+export type ChangeLogRow = {
+  id: number;
+  created_at: string;
+  site: string;
+  field: string;
+  old_value: string | null;
+  new_value: string | null;
+  action: "create" | "update" | "delete" | "import";
+  user: string | null;
+  batch_id: string | null;
+};
+
+// C79: internal-only endpoints — External/External Network get a 403 here.
+export async function fetchSiteHistory(id: number) {
+  const res = await fetch(`/api/backend/members/sites/${id}/history/`);
+  return jsonOrThrow<ChangeLogRow[]>(res);
+}
+
+export async function fetchHistory(params: { page: number; user?: string; action?: string; dateFrom?: string; dateTo?: string }) {
+  const q = new URLSearchParams({ page: String(params.page) });
+  if (params.user) q.set("user", params.user);
+  if (params.action) q.set("action", params.action);
+  if (params.dateFrom) q.set("date_from", params.dateFrom);
+  if (params.dateTo) q.set("date_to", params.dateTo);
+  const res = await fetch(`/api/backend/members/sites/history/?${q}`);
+  return jsonOrThrow<Page<ChangeLogRow>>(res);
+}

@@ -2,6 +2,7 @@ import os
 from rest_framework import serializers
 from .models import Members, MemberLink, Links, SdwanPackage, BaaStatus, LinkRole, LinkProvider
 from .rbac import writable_fields, readable_fields, CORE_EDIT_FIELDS
+from .changelog import audit, snapshot
 
 
 class MemberLinkSerializer(serializers.ModelSerializer):
@@ -25,6 +26,19 @@ class MemberLinkSerializer(serializers.ModelSerializer):
         if self.instance is None and attrs.get("provider") is None:
             raise serializers.ValidationError({"provider": "Bidang ini wajib diisi."})
         return attrs
+
+    _LOG_FIELDS = ("role", "service", "provider", "capacity", "sid")
+
+    def create(self, validated_data):
+        obj = super().create(validated_data)
+        audit(obj, self.context, "create", {f: None for f in self._LOG_FIELDS})
+        return obj
+
+    def update(self, instance, validated_data):
+        before = snapshot(instance, self._LOG_FIELDS)
+        obj = super().update(instance, validated_data)
+        audit(obj, self.context, "update", before)
+        return obj
 
     class Meta:
         model = MemberLink
@@ -72,6 +86,7 @@ class MemberSerializer(serializers.ModelSerializer):
             "upload_baa",
             "invoice_number",
             "invoice_file",
+            "invoice_attachment",
             "po_file_user",
             "po_file_vendor",
             "bap_file",
@@ -94,7 +109,14 @@ class MemberSerializer(serializers.ModelSerializer):
         from django.utils import timezone
         return 1 if obj.offline_at >= timezone.now() else 0
 
-    _FILE_FIELDS = ("upload_baa", "invoice_file", "po_file_user", "po_file_vendor", "bap_file")
+    _FILE_FIELDS = (
+        "upload_baa",
+        "invoice_file",
+        "invoice_attachment",
+        "po_file_user",
+        "po_file_vendor",
+        "bap_file",
+    )
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -123,11 +145,17 @@ class MemberSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {"detail": "Synced (upstream) sites: core fields read-only — %s" % ", ".join(denied_core)}
                 )
-        return super().update(instance, validated_data)
+        # C79/V81: snapshot BEFORE the write, log the fields that really changed.
+        before = snapshot(instance, validated_data.keys())
+        obj = super().update(instance, validated_data)
+        audit(obj, self.context, "update", before)
+        return obj
 
     def create(self, validated_data):
         self._assert_writable(validated_data)
-        return super().create(validated_data)
+        obj = super().create(validated_data)
+        audit(obj, self.context, "create", {f: None for f in validated_data})
+        return obj
 
 
 ALLOWED_UPLOAD_EXT = (".pdf", ".xls", ".xlsx", ".doc", ".docx")
@@ -137,12 +165,20 @@ MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
 class MemberFileSerializer(serializers.ModelSerializer):
     class Meta:
         model = Members
-        fields = ("upload_baa", "po_file_user", "po_file_vendor", "invoice_file", "bap_file")
+        fields = (
+            "upload_baa",
+            "po_file_user",
+            "po_file_vendor",
+            "invoice_file",
+            "invoice_attachment",
+            "bap_file",
+        )
         extra_kwargs = {
             "upload_baa": {"required": False},
             "po_file_user": {"required": False},
             "po_file_vendor": {"required": False},
             "invoice_file": {"required": False},
+            "invoice_attachment": {"required": False},
             "bap_file": {"required": False},
         }
 
@@ -171,4 +207,7 @@ class MemberFileSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         self._assert_writable(validated_data)
-        return super().update(instance, validated_data)
+        before = snapshot(instance, validated_data.keys())
+        obj = super().update(instance, validated_data)
+        audit(obj, self.context, "update", before)
+        return obj

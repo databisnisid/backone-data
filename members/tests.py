@@ -1449,3 +1449,164 @@ class SitesXlsxImportTest(TestCase):
         self.assertEqual(self.site.notes, "fin-note")  # writable for Finance
         self.assertEqual(changed, {"Sites": 1, "Links": 0})
         self.assertEqual(rows, [["Sites", 2, 1]])
+
+    def test_project_number_survives_the_round_trip_and_a_blank_cell_clears_it(self):
+        # V78/B12: the export writes `Project Number`, so the importer must read
+        # it back — an unread column silently dropped every edit behind a green
+        # preview.
+        headers = self.SITE_HEADERS + ["Project Number"]
+        self.site.project_number = "PRJ-1"
+        self.site.save()
+        r = self._post(
+            "apply", sites=[["S1", "Synced Site", "", "", "10.0.0.1", "", "PRJ-2"]], site_headers=headers
+        )
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["changed"]["Sites"], 1)
+        self.site.refresh_from_db()
+        self.assertEqual(self.site.project_number, "PRJ-2")
+        r = self._post("apply", sites=[["S1", "Synced Site", "", "", "10.0.0.1", "", ""]], site_headers=headers)
+        self.assertEqual(r.status_code, 200)
+        self.site.refresh_from_db()
+        self.assertIsNone(self.site.project_number)
+
+
+class SiteChangeLogTest(TestCase):
+    """V81: append-only, human-only field-level log. Cites C79, T82."""
+
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        from rest_framework.test import APIClient
+
+        from .models import LinkProvider, LinkRole, Links
+
+        self.client = APIClient()
+        org = Organizations.objects.create(name="Org")
+        net = Networks.objects.create(name="Net", network_id="NET1")
+        org.networks.add(net)
+        self.boss = User.objects.create_superuser(username="boss", password="pass1234")
+        self.sales = User.objects.create_user(username="sales", password="pass1234", organization=org)
+        self.sales.groups.add(Group.objects.get_or_create(name="Sales")[0])
+        self.external = User.objects.create_user(username="ext", password="pass1234", organization=org)
+        self.external.groups.add(Group.objects.get_or_create(name="External")[0])
+        self.site = Members.objects.create(
+            name="Synced Site", member_id="S1", is_manual=False, network=net, ip_address="10.0.0.1"
+        )
+        LinkRole.objects.get_or_create(name="MAIN")
+        LinkProvider.objects.get_or_create(name="TELKOM")
+        self.service = Links.objects.create(name="SVC")
+        self.link = MemberLink.objects.create(
+            member=self.site,
+            role=LinkRole.objects.get(name="MAIN"),
+            provider=LinkProvider.objects.get(name="TELKOM"),
+            capacity="100M",
+            sid="OLD",
+            service=self.service,
+        )
+
+    def test_serializer_update_logs_only_the_changed_fields(self):
+        from .models import SiteChangeLog
+
+        self.client.force_authenticate(user=self.boss)
+        r = self.client.patch(f"/api/members/sites/{self.site.pk}/", {"ip_address": "10.9.9.9"}, format="json")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(
+            list(SiteChangeLog.objects.values_list("field", "old_value", "new_value")),
+            [("ip_address", "10.0.0.1", "10.9.9.9")],
+        )
+        # An edit that changes nothing appends nothing.
+        self.client.patch(f"/api/members/sites/{self.site.pk}/", {"ip_address": "10.9.9.9"}, format="json")
+        self.assertEqual(SiteChangeLog.objects.count(), 1)
+
+    def test_link_delete_logs_every_populated_field(self):
+        from .models import SiteChangeLog
+
+        self.client.force_authenticate(user=self.sales)
+        r = self.client.delete(f"/api/members/links/{self.link.pk}/")
+        self.assertEqual(r.status_code, 204)
+        logged = dict(
+            (f, (old, new))
+            for f, old, new in SiteChangeLog.objects.values_list("field", "old_value", "new_value")
+        )
+        self.assertEqual(logged["sid"], ("OLD", None))
+        self.assertEqual(logged["capacity"], ("100M", None))
+        self.assertEqual(logged["provider"], ("TELKOM", None))
+        self.assertIsNone(logged["role"][1])
+        # Lookups log their name, not the pk - the log is meant to be read.
+        self.assertEqual(logged["service"], ("SVC", None))
+        self.assertEqual(SiteChangeLog.objects.first().action, "delete")
+
+    def test_import_stamps_one_batch_id_on_every_row_it_writes(self):
+        import io
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from openpyxl import Workbook
+
+        from .models import SiteChangeLog
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Sites"
+        ws.append(["Member ID", "IP Address", "Notes"])
+        ws.append(["S1", "10.9.9.9", "imp"])
+        lws = wb.create_sheet("Links")
+        lws.append(["Member ID", "Link ID", "Role", "Service", "Provider", "CID", "SID"])
+        lws.append(["S1", self.link.pk, "MAIN", "SVC", "TELKOM", "100M", "NEW"])
+        buf = io.BytesIO()
+        wb.save(buf)
+        self.client.force_authenticate(user=self.boss)
+        r = self.client.post(
+            "/api/members/sites/import/apply/",
+            {"file": SimpleUploadedFile("sites.xlsx", buf.getvalue())},
+            format="multipart",
+        )
+        self.assertEqual(r.status_code, 200)
+        rows = SiteChangeLog.objects.all()
+        self.assertEqual(rows.count(), 3)
+        self.assertEqual(len(set(rows.values_list("batch_id", flat=True))), 1)
+        self.assertIsNotNone(rows.first().batch_id)
+        self.assertEqual(set(rows.values_list("action", flat=True)), {"import"})
+
+    def test_sync_data_adds_zero_rows(self):
+        # V81: the hourly upsert is not a person. Drive the real sync against a
+        # mocked upstream and assert the log stayed empty even though the site changed.
+        from unittest.mock import MagicMock, patch
+
+        from .models import SiteChangeLog
+        from .utils import get_members_by_net
+
+        payload = [
+            {
+                "name": "Renamed By Sync",
+                "description": "",
+                "member_id": "S1",
+                "address": "New Addr",
+                "location": "",
+                "online_at": None,
+                "offline_at": None,
+                "mobile_number_first": "0812",
+                "quota_first": "1,2,3",
+            }
+        ]
+        with patch("members.utils.requests.get") as get:
+            get.return_value = MagicMock(json=lambda: payload)
+            get_members_by_net("http://upstream", "NET1")
+        self.site.refresh_from_db()
+        self.assertEqual(self.site.address, "New Addr")
+        self.assertEqual(SiteChangeLog.objects.count(), 0)
+
+    def test_external_gets_403_from_both_history_endpoints(self):
+        self.client.force_authenticate(user=self.external)
+        self.assertEqual(self.client.get(f"/api/members/sites/{self.site.pk}/history/").status_code, 403)
+        self.assertEqual(self.client.get("/api/members/sites/history/").status_code, 403)
+
+    def test_internal_roles_read_both_endpoints(self):
+        self.client.force_authenticate(user=self.boss)
+        self.client.patch(f"/api/members/sites/{self.site.pk}/", {"ip_address": "10.9.9.9"}, format="json")
+        one = self.client.get(f"/api/members/sites/{self.site.pk}/history/")
+        self.assertEqual(one.status_code, 200)
+        self.assertEqual(one.json()[0]["field"], "ip_address")
+        self.assertEqual(one.json()[0]["user"], "boss")
+        whole = self.client.get("/api/members/sites/history/?action=update&user=boss")
+        self.assertEqual(whole.status_code, 200)
+        self.assertEqual(whole.json()["count"], 1)
+        self.assertEqual(whole.json()["results"][0]["site"], "Synced Site")

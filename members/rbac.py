@@ -3,6 +3,7 @@ FEATURE_FIELDS = (
     "upload_baa",
     "invoice_number",
     "invoice_file",
+    "invoice_attachment",
     "po_file_user",
     "po_file_vendor",
     "bap_file",
@@ -33,16 +34,19 @@ WRITE_BY_ROLE = {
     "Support": {"ip_address", "member_links"},
     "Sales": {"baa_status_category", "upload_baa", "notes", "member_links", "member_code", "sdwan_package", "po_file_user"},
     "Purchasing": {"po_file_vendor", "project_number"},
-    "Finance": {"invoice_number", "invoice_file", "notes"},
+    "Finance": {"invoice_number", "invoice_file", "invoice_attachment", "notes"},
     "External": set(),
     "External Network": set(),
 }
+
+# Roles allowed to read the site change log (C79/V81). Internal only.
+HISTORY_ROLES = {"Support", "Sales", "Finance", "Purchasing"}
 # Fields a role may READ on top of the always-readable core grid fields.
 READ_EXTRA_BY_ROLE = {
     "Superuser": set(FEATURE_FIELDS),
     "Sales": {"baa_status_category", "upload_baa", "notes", "member_links"},
     "Purchasing": {"po_file_vendor", "project_number"},
-    "Finance": {"invoice_number", "invoice_file", "po_file_user", "po_file_vendor", "notes"},
+    "Finance": {"invoice_number", "invoice_file", "invoice_attachment", "po_file_user", "po_file_vendor", "notes"},
     "External": {"notes"},
     "External Network": {"notes"},
 }
@@ -95,3 +99,10 @@ def readable_fields(user):
     for role in roles_for(user):
         fields |= READ_EXTRA_BY_ROLE.get(role, set())
     return fields
+
+
+def can_read_history(user):
+    """C79/V81: the change log is internal-only — External/External Network get 403."""
+    if user.is_superuser:
+        return True
+    return bool(HISTORY_ROLES & set(user.groups.values_list("name", flat=True)))

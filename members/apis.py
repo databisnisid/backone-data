@@ -1,3 +1,4 @@
+import uuid
 from django.db import transaction
 from django.db.models import Count, Exists, OuterRef, Q
 from django.utils import timezone
@@ -13,6 +14,9 @@ from openpyxl import Workbook, load_workbook
 from .models import Members, MemberLink
 from .serializers import MemberSerializer, MemberFileSerializer, MemberLinkSerializer
 from .rbac import CORE_EDIT_FIELDS, readable_fields, writable_fields, sees_all_sites
+from .rbac import can_read_history
+from .changelog import log_changes, snapshot
+from .models import SiteChangeLog
 from rest_framework.permissions import BasePermission
 from .models import (
     BaaStatus,
@@ -357,6 +361,7 @@ SITES_COLUMNS = {
     "sdwan package": "sdwan_package",
     "baa status category": "baa_status_category",
     "invoice number": "invoice_number",
+    "project number": "project_number",
     "notes": "notes",
 }
 LINKS_COLUMNS = {
@@ -454,7 +459,7 @@ def _links_and_lookup(user):
     }
 
 
-def _stage_site(entry, member, request, allowed, writes, problems):
+def _stage_site(entry, member, request, allowed, writes, problems, ctx=None):
     cells = entry["cells"]
     fields = entry["fields"]
     payload = {}
@@ -480,7 +485,8 @@ def _stage_site(entry, member, request, allowed, writes, problems):
         payload = {f: v for f, v in payload.items() if f not in CORE_EDIT_FIELDS}
     if not payload:
         return 0
-    serializer = MemberSerializer(member, data=payload, partial=True, context={"request": request})
+    context = dict({"request": request}, **(ctx or {}))
+    serializer = MemberSerializer(member, data=payload, partial=True, context=context)
     if not serializer.is_valid():
         problems.append(
             {"sheet": "Sites", "row": entry["row"], "message": _messages(serializer.errors)}
@@ -498,7 +504,7 @@ def _stage_site(entry, member, request, allowed, writes, problems):
     return len(changed)
 
 
-def _stage_link(entry, member, request, lookup, links, writes, problems):
+def _stage_link(entry, member, request, lookup, links, writes, problems, ctx=None):
     cells = entry["cells"]
     row_problem = {
         "sheet": "Links",
@@ -557,8 +563,9 @@ def _stage_link(entry, member, request, lookup, links, writes, problems):
         # leaves the stored value alone (`value == ""` on both paths).
         if column in entry["fields"]:
             payload[column] = cells.get(column) or ""
+    context = dict({"request": request}, **(ctx or {}))
     serializer = MemberLinkSerializer(
-        instance, data=payload, partial=True, context={"request": request}
+        instance, data=payload, partial=True, context=context
     )
     if not serializer.is_valid():
         problems.append({**row_problem, "message": _messages(serializer.errors)})
@@ -597,6 +604,8 @@ def _apply_workbook(request, upload):
     changed = {"Sites": 0, "Links": 0}
     changed_rows = []
     writes = []
+    # C79: one import stamps the same batch_id on every log row it writes.
+    ctx = {"changelog_action": "import", "changelog_batch": uuid.uuid4()}
     sites = {}
     for entry in rows:
         member_id = entry["cells"].get("member_id")
@@ -619,13 +628,25 @@ def _apply_workbook(request, upload):
                 continue
             sites[member_id] = member
         if entry["sheet"] == "Sites":
-            n = _stage_site(entry, member, request, allowed, writes, problems)
+            n = _stage_site(entry, member, request, allowed, writes, problems, ctx)
         else:
-            n = _stage_link(entry, member, request, lookup, links, writes, problems)
+            n = _stage_link(entry, member, request, lookup, links, writes, problems, ctx)
         changed[entry["sheet"]] += n
         if n:
             changed_rows.append([entry["sheet"], entry["row"], n])
     return problems, changed, changed_rows, writes
+
+class SiteChangeLogSerializer(serializers.ModelSerializer):
+    user = serializers.CharField(source="user.username", read_only=True, default=None)
+    site = serializers.CharField(source="member.name", read_only=True)
+
+    class Meta:
+        model = SiteChangeLog
+        fields = ("id", "created_at", "site", "field", "old_value", "new_value", "action", "user", "batch_id")
+
+
+def _link_snapshot(link):
+    return snapshot(link, ("role", "service", "provider", "capacity", "sid"))
 
 
 class SitesViewSet(viewsets.ModelViewSet):
@@ -669,7 +690,14 @@ class SitesViewSet(viewsets.ModelViewSet):
         site.refresh_from_db()
         out = MemberSerializer(site, context={"request": request})
         return Response(out.data)
-    FILE_FIELD_NAMES = {"upload_baa", "po_file_user", "po_file_vendor", "invoice_file", "bap_file"}
+    FILE_FIELD_NAMES = {
+        "upload_baa",
+        "po_file_user",
+        "po_file_vendor",
+        "invoice_file",
+        "invoice_attachment",
+        "bap_file",
+    }
 
     @action(detail=True, methods=["post"], url_path="delete-file")
     def delete_file(self, request, pk=None):
@@ -677,8 +705,10 @@ class SitesViewSet(viewsets.ModelViewSet):
         field_name = request.data.get("field")
         if field_name not in self.FILE_FIELD_NAMES:
             return Response({"detail": "Invalid field name."}, status=400)
+        before = snapshot(site, (field_name,))
         setattr(site, field_name, None)
         site.save(update_fields=[field_name])
+        log_changes(site, request.user, "update", before)
         site.refresh_from_db()
         out = MemberSerializer(site, context={"request": request})
         return Response(out.data)
@@ -904,6 +934,39 @@ class SitesViewSet(viewsets.ModelViewSet):
                 write()
         return Response(body)
 
+    @action(detail=True, methods=["get"], url_path="history")
+    def history(self, request, pk=None):
+        """C79/V81: last 20 log rows for one site, internal roles only."""
+        if not can_read_history(request.user):
+            raise PermissionDenied("History is internal-only.")
+        site = self.get_object()
+        rows = SiteChangeLog.objects.filter(member=site).order_by("-created_at", "-id")[:20]
+        return Response(SiteChangeLogSerializer(rows, many=True).data)
+
+    @action(detail=False, methods=["get"], url_path="history")
+    def history_global(self, request):
+        """C79/V81: paginated, filterable log across the caller's sites."""
+        if not can_read_history(request.user):
+            raise PermissionDenied("History is internal-only.")
+        qs = SiteChangeLog.objects.filter(
+            member__in=member_queryset_for(request.user)
+        ).select_related("user", "member")
+        params = request.query_params
+        if params.get("site"):
+            qs = qs.filter(member_id=params["site"])
+        if params.get("user"):
+            qs = qs.filter(user__username=params["user"])
+        if params.get("action"):
+            qs = qs.filter(action=params["action"])
+        if params.get("date_from"):
+            qs = qs.filter(created_at__date__gte=params["date_from"])
+        if params.get("date_to"):
+            qs = qs.filter(created_at__date__lte=params["date_to"])
+        page = self.paginate_queryset(qs)
+        return self.get_paginated_response(
+            SiteChangeLogSerializer(page, many=True).data
+        )
+
     def get_serializer_class(self):
         return MemberSerializer
 
@@ -933,6 +996,9 @@ class MemberLinkViewSet(viewsets.ModelViewSet):
 
     def perform_destroy(self, instance):
         self._assert_sales_write()
+        log_changes(
+            instance, self.request.user, "delete", _link_snapshot(instance), clear=True
+        )
         instance.delete()
 
     @action(detail=False, methods=["get"], url_path="services")

@@ -1,4 +1,4 @@
-import { Gauge, Globe, LayoutDashboard, Server, Settings, type LucideIcon, Users } from "lucide-react";
+import { Clock, Gauge, Globe, LayoutDashboard, Server, Settings, type LucideIcon, Users } from "lucide-react";
 
 export type NavBadge = "new" | "soon";
 
@@ -72,6 +72,12 @@ export const sidebarItems: NavGroup[] = [
         title: "Pengaturan",
         url: "/organizations",
         icon: Users,
+      },
+      {
+        id: "history",
+        title: "Riwayat",
+        url: "/history",
+        icon: Clock,
       },
       {
         id: "settings-lookups",

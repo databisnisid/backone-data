@@ -164,6 +164,9 @@ class Members(ClusterableModel):
     invoice_file = models.FileField(
         _("Invoice File"), upload_to="invoice/", blank=True, null=True
     )
+    invoice_attachment = models.FileField(
+        _("Invoice Attachment"), upload_to="invoice/", blank=True, null=True
+    )
     bap_file = models.FileField(
         _("BAP Dismantle"), upload_to="bap/", blank=True, null=True
     )
@@ -200,6 +203,7 @@ class Members(ClusterableModel):
             "po_file_user",
             "po_file_vendor",
             "invoice_file",
+            "invoice_attachment",
             "bap_file",
         ):
             field = getattr(self, field_name, None)
@@ -443,5 +447,40 @@ class MemberLink(models.Model):
             self.provider.name if self.provider else "",
         )
 
+
+class SiteChangeLog(models.Model):
+    """Append-only field-level audit of human writes (C79/V81).
+
+    Written by the serializers and link views only — `sync_data` is not a person
+    (V81), so the hourly upsert never touches this table. `member` CASCADEs: a
+    deleted site takes its own history with it.
+    """
+
+    member = models.ForeignKey(
+        Members, on_delete=models.CASCADE, related_name="change_log"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        blank=True,
+        null=True,
+    )
+    batch_id = models.UUIDField(blank=True, null=True)
+    action = models.CharField(_("Action"), max_length=10)
+    field = models.CharField(_("Field"), max_length=50)
+    old_value = models.TextField(blank=True, null=True)
+    new_value = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "members_change_log"
+        verbose_name = _("Site Change")
+        verbose_name_plural = _("Site Changes")
+        ordering = ("-created_at", "-id")
+        indexes = (models.Index(fields=("member", "-created_at")),)
+
+    def __str__(self):
+        return "%s %s=%s" % (self.action, self.field, self.new_value)
 
 

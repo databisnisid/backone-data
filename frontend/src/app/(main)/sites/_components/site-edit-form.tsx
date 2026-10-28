@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { Link2, Pencil, Plus, Trash2, Upload, X, FileText } from "lucide-react";
+import { History, Link2, Pencil, Plus, Trash2, Upload, X, FileText } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
-import { createSiteLink, deleteSiteFile, deleteSiteLink, fetchLinkServices, fetchMemberOptions, fetchSite, patchSiteLink, uploadSiteFile, type MemberOptions } from "./api";
+import { createSiteLink, deleteSiteFile, deleteSiteLink, fetchLinkServices, fetchMemberOptions, fetchSite, fetchSiteHistory, patchSiteLink, uploadSiteFile, type ChangeLogRow, type MemberOptions } from "./api";
 import {
   isExternalViewOnly,
   isFieldVisible,
@@ -60,6 +60,7 @@ function fileFieldsFor(me: Me): { field: string; label: string; writable: boolea
     { field: "upload_baa", label: "Upload BAA" },
     { field: "po_file_user", label: "PO dari User" },
     { field: "po_file_vendor", label: "PO ke Vendor" },
+    { field: "invoice_attachment", label: "Lampiran Invoice" },
     { field: "invoice_file", label: "Upload Bukti Invoice" },
     { field: "bap_file", label: "BAP Dismantle" },
   ];
@@ -494,6 +495,44 @@ export function SiteEditForm({
           )}
         </div>
       )}
+      {/* C79/V81: internal roles only — the backend 403s External anyway. */}
+      {!isExternalViewOnly(me) && <SiteHistoryPanel siteId={row.id} />}
+    </div>
+  );
+}
+
+function SiteHistoryPanel({ siteId }: { siteId: number }) {
+  const [rows, setRows] = React.useState<ChangeLogRow[] | null>(null);
+
+  React.useEffect(() => {
+    let live = true;
+    fetchSiteHistory(siteId)
+      .then((r) => live && setRows(r))
+      .catch(() => live && setRows([]));
+    return () => {
+      live = false;
+    };
+  }, [siteId]);
+
+  if (!rows || !rows.length) return null;
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="text-muted-foreground flex items-center gap-2 text-xs font-medium">
+        <History className="size-3.5" /> RIWAYAT PERUBAHAN
+      </div>
+      <div className="flex flex-col gap-0.5 rounded-md border border-border px-3 py-2 text-xs">
+        {rows.map((r) => (
+          <div key={r.id} className="flex flex-wrap items-center gap-1.5">
+            <span className="text-muted-foreground">{new Date(r.created_at).toLocaleString("id-ID")}</span>
+            <Badge variant="outline" className="text-[10px]">{r.action}</Badge>
+            <span className="font-medium">{r.field}</span>
+            <span className="text-muted-foreground line-through">{r.old_value ?? "-"}</span>
+            <span>→</span>
+            <span>{r.new_value ?? "-"}</span>
+            <span className="text-muted-foreground">oleh {r.user ?? "sistem"}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

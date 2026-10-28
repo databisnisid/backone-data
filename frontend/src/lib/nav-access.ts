@@ -3,7 +3,7 @@
 // this rule and is checked by the caller before consulting this.
 const EXTERNAL_GROUPS = new Set(["External", "External Network"]);
 
-export const EXTERNAL_HIDDEN_NAV_IDS = new Set(["quota", "networks", "organizations"]);
+export const EXTERNAL_HIDDEN_NAV_IDS = new Set(["quota", "networks", "organizations", "history"]);
 
 export function isExternalNavHidden(groups: readonly string[]): boolean {
   return groups.some((group) => EXTERNAL_GROUPS.has(group));

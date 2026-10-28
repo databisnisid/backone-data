@@ -28,6 +28,7 @@ export type SiteRow = {
   upload_baa: string | null;
   invoice_number: string | null;
   invoice_file: string | null;
+  invoice_attachment: string | null;
   po_file_user: string | null;
   po_file_vendor: string | null;
   bap_file: string | null;
@@ -110,11 +111,11 @@ export function visibleColumns(me: Me): ColVisibility {
 
 // V34-view: writable fields per role (mirrors members/rbac.py WRITE_BY_ROLE).
 const WRITE_BY_ROLE: Record<string, Set<string>> = {
-  Superuser: new Set(["name","member_id","address","location","online_at","offline_at","service_line","network","links","quota_string","upload_baa","invoice_number","invoice_file","po_file_user","po_file_vendor","bap_file","ip_address","sdwan_package","project_number","baa_status_category","notes","member_code","member_links"]),
+  Superuser: new Set(["name","member_id","address","location","online_at","offline_at","service_line","network","links","quota_string","upload_baa","invoice_number","invoice_file","invoice_attachment","po_file_user","po_file_vendor","bap_file","ip_address","sdwan_package","project_number","baa_status_category","notes","member_code","member_links"]),
   Support: new Set(["ip_address","member_links"]),
   Sales: new Set(["baa_status_category","upload_baa","notes","member_links","member_code","sdwan_package","po_file_user"]),
   Purchasing: new Set(["po_file_vendor","project_number"]),
-  Finance: new Set(["invoice_number","invoice_file","notes"]),
+  Finance: new Set(["invoice_number","invoice_file","invoice_attachment","notes"]),
 };
 
 export function writableFieldSet(me: Me): Set<string> {
@@ -137,7 +138,7 @@ export function isFieldWritable(me: Me, field: string): boolean {
 // hides for External/External Network. Every other role renders exactly as before.
 // ponytail: this list mirrors the C39 column set by hand; derive it from
 // members/rbac.py readable_fields() if a role ever needs a partial feature read.
-const EXTERNAL_HIDDEN_FIELDS = new Set(["po_file_user","po_file_vendor","invoice_number","invoice_file","bap_file","notes"]);
+const EXTERNAL_HIDDEN_FIELDS = new Set(["po_file_user","po_file_vendor","invoice_number","invoice_file","invoice_attachment","bap_file","notes"]);
 
 export function isFieldVisible(me: Me, field: string): boolean {
   return !(isExternalViewOnly(me) && EXTERNAL_HIDDEN_FIELDS.has(field));
